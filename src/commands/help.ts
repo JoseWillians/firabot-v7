@@ -16,7 +16,7 @@ const helpCommand: Command = {
 
     // --- CABEÇALHO: FINALIDADE DO BOT ---
     let menu = "*🤖 FIRABOT v7 - ASSISTENTE ACADÊMICO*\n"
-    menu += "_Finalidade: Centralizar e facilitar o acesso a informações, links e documentos do IFMA Açailândia._\n\n"
+    menu += "_Finalidade: Centralizar e facilitar o acesso a informações, links e documentos do IFMA Santa Inês._\n\n"
     
     menu += "*📋 RESUMO DE COMANDOS TÉCNICOS:*\n"
     
