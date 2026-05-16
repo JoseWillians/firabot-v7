@@ -20,8 +20,8 @@ const helpCommand: Command = {
     
     menu += "*📋 RESUMO DE COMANDOS TÉCNICOS:*\n"
     
-    // Adicionamos o !oi manualmente pois ele é o gatilho principal
-    menu += "*!oi*: Começa o menu inicial de navegação\n"
+    menu += "*oi/menu*: Começa o atendimento sem precisar de prefixo\n"
+    menu += "*!oi*: Atalho técnico compatível para abrir o menu inicial\n"
 
     // --- LOOP AUTOMÁTICO PARA OS OUTROS COMANDOS ---
     for (const file of files) {
@@ -33,7 +33,7 @@ const helpCommand: Command = {
     }
 
     // --- RODAPÉ: INSTRUÇÕES ---
-    menu += "\n*💡 DICA:* Para navegar nos menus de Biblioteca, Documentos ou Curso, basta digitar apenas o número da opção (ex: 1, 2) após iniciar com !oi.\n\n"
+    menu += "\n*💡 DICA:* Para navegar nos menus, basta digitar apenas o número da opção depois de enviar oi ou menu.\n\n"
     menu += "_Use o prefixo ! para comandos de sistema._"
 
     await sock.sendMessage(msg.key!.remoteJid!, { text: menu })
