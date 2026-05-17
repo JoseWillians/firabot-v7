@@ -4,7 +4,7 @@
 
 O FiraBot v7 é um bot de WhatsApp em TypeScript para atendimento acadêmico do IFMA Santa Inês. O projeto usa Baileys para conexão com WhatsApp, MySQL para persistência, Docker para ambiente local, menus guiados por números, envio de documentos PDF e estado por usuário.
 
-O projeto está em um estágio saudável de MVP técnico: o fluxo principal funciona, há separação inicial em serviços, logs estruturados, banco local Docker, documentação de operação e testes básicos. A próxima fase deve consolidar o fluxo conversacional e preparar o caminho para um painel administrativo.
+O projeto está em um estágio saudável de MVP técnico: o fluxo principal funciona, há separação inicial em serviços, logs estruturados, banco local Docker, documentação de operação e testes básicos. A próxima prioridade estratégica é preparar o painel administrativo; a IA fica depois dele, como serviço Python separado.
 
 ## 2. Estado Atual
 
@@ -26,13 +26,13 @@ Pontos consolidados:
 - Os estados atuais ainda não representam todo o fluxograma desejado.
 - O menu principal já recebeu a primeira etapa do novo modelo com `Editais Abertos` e `Suporte` como opção 7.
 - Documentos já possuem uma primeira divisão conversacional entre DRCA e CAE, mas ainda precisam evoluir para categorias persistidas no banco.
-- O fluxo de PPC já lista cursos antes de listar documentos PPC; por enquanto apenas Engenharia de Computação possui PDFs cadastrados.
+- O fluxo de PPC já lista cursos antes de listar documentos PPC, com PDFs organizados por curso em `documentos/ppc`.
 - A autenticação Baileys em `auth/` precisa ser tratada como credencial sensível em produção.
 - Os testes ainda não simulam o fluxo completo com Baileys, MySQL e envio de arquivo.
 
-## 4. Painel Administrativo Futuro
+## 4. Painel Administrativo Prioritário
 
-A ideia aprovada para evolução é criar um painel administrativo para operar e manter o bot.
+A ideia aprovada para evolução é criar um painel administrativo para operar e manter o bot. Esse painel tem prioridade maior que a IA, porque resolve primeiro a manutenção real do conteúdo, documentos, setores e operação do WhatsApp.
 
 Perfis desejados:
 
@@ -52,24 +52,26 @@ Perfis desejados:
 Modelo recomendado:
 
 - Manter o bot WhatsApp em TypeScript.
-- Criar uma API administrativa quando a necessidade do painel ficar madura.
+- Criar primeiro uma API administrativa em TypeScript/Node.js para reduzir risco e reaproveitar tipos/serviços atuais.
 - Usar controle de acesso por papéis e escopo de setor.
 - Registrar auditoria de alterações feitas por administradores.
-- Deixar Java como melhoria bem futura, após consolidação do projeto.
+- Deixar Java como melhoria bem futura, após o painel estar validado e caso a governança/integracões institucionais justifiquem.
 
 ## 5. TypeScript e Java
 
-É possível trabalhar com TypeScript e Java, mas Java não deve entrar agora no core do bot.
+É possível trabalhar com TypeScript, Python e Java, cada um com uma fronteira clara.
 
 Recomendação atual:
 
 - TypeScript continua responsável pelo WhatsApp/Baileys.
+- Python fica como linguagem futura da IA, em serviço separado chamado pelo core TypeScript.
 - Java fica como possibilidade futura para backend administrativo, integrações institucionais, relatórios e regras mais pesadas.
 
 Motivo:
 
 - Baileys é uma biblioteca TypeScript/JavaScript orientada a WebSocket e eventos.
 - Migrar o core para Java aumentaria complexidade sem ganho imediato.
+- Python tem o melhor ecossistema para RAG, embeddings, processamento de documentos e classificação de intenção.
 - Um backend Java/Spring Boot pode fazer sentido no futuro para painel, RBAC, auditoria, APIs internas e integrações com sistemas do IFMA.
 
 Arquitetura futura possível:
@@ -77,7 +79,8 @@ Arquitetura futura possível:
 ```text
 WhatsApp
   -> Bot TypeScript com Baileys
-    -> API administrativa
+    -> API administrativa/painel
+    -> Serviço Python de IA futuro
       -> MySQL
       -> Painel web
       -> Documentos
@@ -94,18 +97,26 @@ Curto prazo:
 - Expandir submenus do novo modelo numerado.
 - Evoluir submenus específicos para carregarem dados por categoria/setor no banco.
 - Atualizar `!help` para refletir que `oi` e `menu` não precisam de prefixo.
+- Criar testes com socket fake para `messageHandler`, handlers e fluxos.
+- Validar manualmente os PPCs de todos os cursos cadastrados.
+- Definir escopo mínimo do painel administrativo: login, perfis, setores, documentos, links e status do bot.
 
 Médio prazo:
 
 - Criar categorias para documentos no banco.
-- Criar fluxo de PPC por curso.
+- Mover PPCs e documentos por categoria para dados persistidos, reduzindo hardcode.
+- Criar painel administrativo mínimo com administrador principal e administradores setoriais.
 - Criar fluxo de Links Importantes e Editais Abertos com opção `0` e `encerrar`.
 - Criar testes automatizados para fluxos completos.
 - Criar comandos administrativos restritos por `ADMIN_NUMBERS`.
+- Definir o contrato futuro TypeScript -> Python antes de implementar IA.
+
+Depois do painel:
+
+- Criar serviço Python mínimo de IA com classificação de intenção, desligado por padrão.
 
 Longo prazo:
 
-- Painel administrativo com autenticação e RBAC.
 - Auditoria de alterações administrativas.
 - Métricas de uso, documentos mais acessados e falhas recorrentes.
 - Healthcheck operacional.

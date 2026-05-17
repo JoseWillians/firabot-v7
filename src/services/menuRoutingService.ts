@@ -1,6 +1,16 @@
 import { UserState } from '../menus/types.js'
 
-export type MenuRoute = 'main' | 'docs' | 'docs_drca' | 'docs_cae' | 'curso' | 'curso_eng_comp'
+export type MenuRoute =
+  | 'main'
+  | 'docs'
+  | 'docs_drca'
+  | 'docs_cae'
+  | 'curso'
+  | 'curso_eng_comp'
+  | 'curso_bach_adm'
+  | 'curso_lic_fis'
+  | 'curso_grad_tce'
+  | 'curso_eng_civil'
 
 /**
  * Garante que uma opção numérica seja interpretada pelo menu correto.
@@ -14,5 +24,9 @@ export function getMenuRouteForOption(currentState: UserState, option: string): 
   if (currentState === 'docs_cae') return 'docs_cae'
   if (currentState === 'curso') return 'curso'
   if (currentState === 'curso_eng_comp') return 'curso_eng_comp'
+  if (currentState === 'curso_bach_adm') return 'curso_bach_adm'
+  if (currentState === 'curso_lic_fis') return 'curso_lic_fis'
+  if (currentState === 'curso_grad_tce') return 'curso_grad_tce'
+  if (currentState === 'curso_eng_civil') return 'curso_eng_civil'
   return 'main'
 }

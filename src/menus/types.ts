@@ -6,10 +6,15 @@ export type UserState =
   | 'docs_cae'
   | 'curso'
   | 'curso_eng_comp'
+  | 'curso_bach_adm'
+  | 'curso_lic_fis'
+  | 'curso_grad_tce'
+  | 'curso_eng_civil'
   | 'links'
   | 'editais'
   | 'ru'
   | 'suporte'
+  | 'suporte_confirmacao'
   | 'encerrado'
 
 export interface MenuOption {

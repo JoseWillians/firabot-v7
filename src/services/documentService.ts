@@ -11,6 +11,7 @@ export interface ActiveDocument {
   key: string
   label: string
   path: string
+  summary?: string
 }
 
 export interface DocumentSendResult {
@@ -39,8 +40,35 @@ function mapFallbackDocuments(): ActiveDocument[] {
   return fallbackDocuments.map(doc => ({
     key: doc.key,
     label: doc.label,
-    path: doc.path
+    path: doc.path,
+    summary: doc.summary
   }))
+}
+
+function getDocumentSummary(label: string, documentPath: string) {
+  const normalized = `${label} ${documentPath}`.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+
+  if (normalized.includes('diploma') && normalized.includes('tecnico')) {
+    return 'Use este formulário para solicitar emissão ou encaminhamento relacionado ao diploma de curso técnico.'
+  }
+
+  if (normalized.includes('requerimento superior')) {
+    return 'Use este requerimento para solicitações acadêmicas de cursos superiores, como aproveitamento, declarações ou demandas de registro acadêmico.'
+  }
+
+  if (normalized.includes('termo de desistencia')) {
+    return 'Use este termo quando o estudante desejar formalizar a desistência do curso ou de vínculo acadêmico, conforme orientação institucional.'
+  }
+
+  if (normalized.includes('requerimento academico')) {
+    return 'Use este requerimento para solicitar serviços acadêmicos gerais junto à DRCA, como ajustes, declarações ou outros procedimentos administrativos.'
+  }
+
+  if (normalized.includes('ppc')) {
+    return 'Este PPC apresenta a estrutura oficial do curso, incluindo matriz curricular, carga horária, perfil do egresso e regras acadêmicas da formação.'
+  }
+
+  return 'Este documento ajuda no atendimento acadêmico e deve ser utilizado conforme a orientação do setor responsável.'
 }
 
 /**
@@ -48,15 +76,16 @@ function mapFallbackDocuments(): ActiveDocument[] {
  * Se o banco estiver indisponível ou vazio, usa uma lista local de fallback
  * para manter o atendimento básico funcionando.
  */
-export async function getAvailableDocuments(): Promise<ActiveDocument[]> {
+export async function getAvailableDocuments(categoryCode = 'drca'): Promise<ActiveDocument[]> {
   try {
-    const docs = await getActiveDocs()
-    if (!docs.length) return mapFallbackDocuments()
+    const docs = await getActiveDocs(categoryCode)
+    if (!docs.length) return categoryCode === 'drca' ? mapFallbackDocuments() : []
 
-    return docs.map((doc: { name: string; path: string }, index: number) => ({
+    return docs.map((doc: { name: string; path: string; summary?: string }, index: number) => ({
       key: String(index + 1),
       label: doc.name,
-      path: doc.path
+      path: doc.path,
+      summary: doc.summary || getDocumentSummary(doc.name, doc.path)
     }))
   } catch (error) {
     errorLog('DATABASE_ERROR', 'Erro ao carregar documentos ativos. Usando lista local de fallback', error)
@@ -65,13 +94,19 @@ export async function getAvailableDocuments(): Promise<ActiveDocument[]> {
 }
 
 export async function formatDocumentsMenu() {
-  const documents = await getAvailableDocuments()
+  const documents = await getAvailableDocuments('drca')
   return formatMenu(createDocsMenu(documents))
 }
 
 export async function findDocumentByOption(option: string): Promise<ActiveDocument | undefined> {
-  const documents = await getAvailableDocuments()
+  const documents = await getAvailableDocuments('drca')
   return documents.find(doc => doc.key === option)
+}
+
+export function formatDocumentSuccessMessage(document: ActiveDocument) {
+  return document.summary
+    ? `Documento enviado com sucesso.\n\nResumo: ${document.summary}`
+    : 'Documento enviado com sucesso.'
 }
 
 export async function checkDocumentsHealth(): Promise<DocumentsHealth> {

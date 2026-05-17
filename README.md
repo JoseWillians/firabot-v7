@@ -88,6 +88,7 @@ Tabelas usadas:
 - `user_states`: estado atual de navegação.
 - `logs`: histórico simples de eventos.
 - `docs`: documentos ativos carregados no menu de documentos.
+- `sectors`, `admin_roles`, `admin_users`, `admin_user_sectors`, `admin_audit_logs`: base inicial para o painel administrativo e RBAC por setor.
 
 Para produção, use outro `.env` apontando para o servidor do IFMA. Não misture credenciais remotas com o `.env` local de desenvolvimento.
 
@@ -218,13 +219,21 @@ O menu principal não exibe `0 - Voltar`. A opção `0` vale apenas dentro de su
 
 - `docs/RELATORIO_ESTRATEGICO.md`: visão técnica aprovada, riscos, melhorias futuras e decisão de deixar Java para uma fase bem futura.
 - `docs/SUBAGENTES_FIXOS.md`: cinco frentes fixas de trabalho para organizar próximas tarefas, responsabilidades e skills.
+- `docs/PLANO_PAINEL_ADMIN.md`: plano prioritário do painel administrativo antes da IA.
+- `docs/PLANO_IA_INTELIGENTE.md`: plano futuro para IA em Python como serviço separado, desacoplado do core TypeScript do WhatsApp.
 - `docs/REGISTRO_DE_MUDANCAS.md`: histórico consolidado de mudanças e decisões.
 
 ## Fluxo de Estado
 
 O bot consulta o estado do usuário antes de interpretar opções numéricas. Assim, depois de escolher `2 - Documentos`, a próxima opção escolhe entre `1 - Documentos DRCA` e `2 - Documentos CAE`. Dentro de `Documentos DRCA`, a opção `3` envia `Requerimento Superior`, em vez de abrir o menu de PPC do curso.
 
-No fluxo `3 - PPC do Curso`, o bot primeiro lista cursos. Por enquanto, apenas `Engenharia de Computação` possui PPCs cadastrados; os demais cursos aparecem como opções preparadas para cadastro futuro.
+No fluxo `3 - PPC do Curso`, o bot primeiro lista cursos e depois mostra os PPCs disponíveis daquele curso. Os PDFs ficam organizados em subpastas dentro de `documentos/ppc`.
+
+Depois de enviar um documento, o bot mostra uma continuação contextual com as outras opções do mesmo submenu, além de `0 - Voltar ao Menu Principal` e `encerrar - Terminar conversa`.
+
+No fluxo `7 - Suporte`, enquanto o painel administrativo e os responsáveis setoriais ainda não existem, o bot pede que o usuário envie sua dúvida em uma mensagem. Após registrar a mensagem, ele pergunta se o usuário deseja voltar ao menu principal ou encerrar.
+
+No fluxo `5 - Editais Abertos`, o bot lista até 10 editais em andamento da página oficial de processos seletivos do IFMA e, na sequência, mostra as opções para voltar ao menu principal ou encerrar.
 
 ## Solução de Problemas
 
@@ -245,12 +254,13 @@ No fluxo `3 - PPC do Curso`, o bot primeiro lista cursos. Por enquanto, apenas `
 5. Envie `1`, `2`, `3` e `4` dentro de DRCA e confirme o envio dos quatro PDFs.
 6. Envie `3` dentro de DRCA e confirme especificamente o envio de `Requerimento Superior`.
 7. Envie `0` e confirme retorno ao menu principal.
-8. Envie `3`, depois `1`, e confirme abertura dos PPCs de Engenharia de Computação.
-9. Envie `2` dentro de Engenharia de Computação e confirme envio do PPC 2024.
+8. Envie `3`, escolha cada curso disponível e confirme abertura do submenu de PPCs.
+9. Escolha um PPC e confirme envio do PDF, resumo e lista das outras opções do mesmo submenu.
 10. Envie `oi` em qualquer estado e confirme reset para `main`.
 11. Envie `!ping`, `!help` e `!status`.
-12. Envie `4`, depois `0`, e confirme retorno ao menu principal.
-13. Envie `5`, depois `encerrar`, e confirme encerramento do atendimento.
+12. Envie `4`, confirme o link direto do Login SUAP, depois `0`, e confirme retorno ao menu principal.
+13. Envie `5`, confira a lista de editais do IFMA, depois `encerrar`, e confirme encerramento do atendimento.
+14. Envie `7`, mande uma mensagem de suporte, depois envie `0` ou `encerrar`.
 
 ## Observações Sobre WhatsApp/Baileys
 

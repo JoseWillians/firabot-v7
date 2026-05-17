@@ -1,6 +1,6 @@
 import { MenuDefinition, UserState } from '../menus/types.js'
 import { mainMenu } from '../menus/mainMenu.js'
-import { courseMenu, engineeringComputerPpcMenu } from '../menus/courseMenu.js'
+import { courseMenu, engineeringComputerPpcMenu, formatPpcMenuDefinition } from '../menus/courseMenu.js'
 
 /**
  * Renderiza menus declarativos em texto de WhatsApp.
@@ -24,6 +24,11 @@ export function formatEngineeringComputerPpcMenu() {
   return formatMenu(engineeringComputerPpcMenu)
 }
 
+export function formatPpcMenuByState(state: UserState) {
+  const menu = formatPpcMenuDefinition(state)
+  return menu ? formatMenu(menu) : undefined
+}
+
 export function getMenuNameByState(state: UserState) {
   const names: Record<UserState, string> = {
     main: 'menu principal',
@@ -33,10 +38,15 @@ export function getMenuNameByState(state: UserState) {
     docs_cae: 'menu de documentos CAE',
     curso: 'menu de curso',
     curso_eng_comp: 'menu de PPC de Engenharia de Computação',
+    curso_bach_adm: 'menu de PPC de Administração',
+    curso_lic_fis: 'menu de PPC de Licenciatura em Física',
+    curso_grad_tce: 'menu de PPC de Tecnologia em Construção de Edifícios',
+    curso_eng_civil: 'menu de PPC de Engenharia Civil',
     links: 'menu de links importantes',
     editais: 'menu de editais abertos',
     ru: 'menu do RU',
     suporte: 'fluxo de suporte',
+    suporte_confirmacao: 'confirmação de suporte',
     encerrado: 'atendimento encerrado'
   }
 

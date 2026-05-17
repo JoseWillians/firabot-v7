@@ -230,6 +230,9 @@ Tarefas típicas:
 | 2026-05-15 | DevOps, Segurança e Operação | Revisar riscos operacionais antes de produção | Concluído | Relatório recebido |
 | 2026-05-15 | QA, Documentação e Conhecimento | Planejar testes e documentação da próxima etapa | Concluído | Relatório recebido |
 | 2026-05-15 | Engenheiro de Bot WhatsApp e Conversação | Aplicar primeira fatia do novo fluxo: menu 1-7, estados informativos e encerrar sem prefixo | Concluído | Build e testes |
+| 2026-05-16 | Engenheiro de Bot WhatsApp e Conversação | Quebrar `messageHandler.ts` em coordenador, handlers e flows por área | Concluído | `npm test` |
+| 2026-05-16 | Engenheiro de Backend, Banco e Painel | Mapear novos PPCs por curso e ajustar estados semânticos | Concluído | `npm test` |
+| 2026-05-16 | QA, Documentação e Conhecimento | Validar summaries pós-documento e registrar plano de IA futura | Concluído | `docs/PLANO_IA_INTELIGENTE.md` |
 
 ## Observação Sobre Java
 

@@ -8,12 +8,38 @@ import { getMenuRouteForOption } from '../dist/services/menuRoutingService.js'
 import { normalizeUserState } from '../dist/services/userStateService.js'
 import { maskPhone } from '../dist/services/logService.js'
 import { formatCourseMenu, formatMainMenu, formatMenu } from '../dist/services/menuService.js'
+import { formatDocumentSuccessMessage } from '../dist/services/documentService.js'
 import { extractMessageText } from '../dist/services/messageTextService.js'
 import { docsCategoryMenu } from '../dist/menus/docsMenu.js'
+import { getPpcCategoryCodeByState } from '../dist/menus/courseMenu.js'
+import { formatOpenNoticesMessage, openNotices } from '../dist/menus/noticesMenu.js'
+import { formatContextualFollowUpMessage, getRemainingMenuOptions } from '../dist/services/followUpMenuService.js'
+import { sendUnknownMessage } from '../dist/flows/conversationFlow.js'
+import { formatSupportAcknowledgement, formatSupportPrompt } from '../dist/flows/supportFlow.js'
 
 function runTest(name, testFn) {
-  testFn()
+  const result = testFn()
+  if (result && typeof result.then === 'function') {
+    throw new Error(`Teste assíncrono chamado sem await: ${name}`)
+  }
   console.log(`ok - ${name}`)
+}
+
+async function runAsyncTest(name, testFn) {
+  await testFn()
+  console.log(`ok - ${name}`)
+}
+
+function createFakeSocket() {
+  const messages = []
+  return {
+    messages,
+    sock: {
+      async sendMessage(jid, content) {
+        messages.push({ jid, content })
+      }
+    }
+  }
 }
 
 runTest('detecta saudações e mensagens de início sem prefixo', () => {
@@ -61,9 +87,13 @@ runTest('mantém curso roteando para seleção de curso', () => {
   assert.equal(getMenuRouteForOption('curso', '4'), 'curso')
 })
 
-runTest('mantém curso_eng_comp no roteamento certo', () => {
+runTest('mantém estados de PPC por curso no roteamento certo', () => {
   assert.equal(getMenuRouteForOption('curso_eng_comp', '1'), 'curso_eng_comp')
   assert.equal(getMenuRouteForOption('curso_eng_comp', '2'), 'curso_eng_comp')
+  assert.equal(getMenuRouteForOption('curso_bach_adm', '1'), 'curso_bach_adm')
+  assert.equal(getMenuRouteForOption('curso_lic_fis', '2'), 'curso_lic_fis')
+  assert.equal(getMenuRouteForOption('curso_grad_tce', '1'), 'curso_grad_tce')
+  assert.equal(getMenuRouteForOption('curso_eng_civil', '1'), 'curso_eng_civil')
 })
 
 runTest('volta para o menu principal com zero em qualquer submenu', () => {
@@ -80,12 +110,13 @@ runTest('menu principal segue o novo modelo numerado sem opção zero', () => {
   assert.doesNotMatch(menu, /0 - Voltar/)
 })
 
-runTest('menu de PPC lista Engenharia de Computação e cursos fictícios', () => {
+runTest('menu de PPC lista cursos com documentos cadastrados', () => {
   const menu = formatCourseMenu()
   assert.match(menu, /1 - Engenharia de Computação/)
-  assert.match(menu, /2 - Administração/)
+  assert.match(menu, /2 - Bacharelado em Administração/)
   assert.match(menu, /3 - Licenciatura em Física/)
-  assert.match(menu, /4 - Tecnologia em Alimentos/)
+  assert.match(menu, /4 - Tecnologia em Construção de Edifícios/)
+  assert.match(menu, /5 - Engenharia Civil/)
   assert.match(menu, /0 - Voltar ao Menu Principal/)
 })
 
@@ -103,10 +134,15 @@ runTest('normaliza novos estados informativos', () => {
   assert.equal(normalizeUserState('docs_cae'), 'docs_cae')
   assert.equal(normalizeUserState('curso'), 'curso')
   assert.equal(normalizeUserState('curso_eng_comp'), 'curso_eng_comp')
+  assert.equal(normalizeUserState('curso_bach_adm'), 'curso_bach_adm')
+  assert.equal(normalizeUserState('curso_lic_fis'), 'curso_lic_fis')
+  assert.equal(normalizeUserState('curso_grad_tce'), 'curso_grad_tce')
+  assert.equal(normalizeUserState('curso_eng_civil'), 'curso_eng_civil')
   assert.equal(normalizeUserState('links'), 'links')
   assert.equal(normalizeUserState('editais'), 'editais')
   assert.equal(normalizeUserState('ru'), 'ru')
   assert.equal(normalizeUserState('suporte'), 'suporte')
+  assert.equal(normalizeUserState('suporte_confirmacao'), 'suporte_confirmacao')
   assert.equal(normalizeUserState('encerrado'), 'encerrado')
 })
 
@@ -116,6 +152,70 @@ runTest('usa main como fallback para estado inválido', () => {
 
 runTest('mascara telefone em logs técnicos', () => {
   assert.equal(maskPhone('5599999999999'), '5599****99')
+})
+
+runTest('mensagem de sucesso de documento inclui resumo quando disponível', () => {
+  const message = formatDocumentSuccessMessage({
+    key: '1',
+    label: 'Documento de teste',
+    path: './documentos/teste.pdf',
+    summary: 'Serve para orientar o estudante sobre este documento.'
+  })
+
+  assert.match(message, /Documento enviado com sucesso\./)
+  assert.match(message, /Resumo: Serve para orientar/)
+})
+
+runTest('follow-up contextual mostra opções restantes do mesmo menu', () => {
+  const options = [
+    { key: '1', label: 'Requerimento Acadêmico' },
+    { key: '2', label: 'Requerimento Diploma Técnico' },
+    { key: '3', label: 'Requerimento Superior' },
+    { key: '4', label: 'Termo de Desistência' }
+  ]
+
+  const remainingOptions = getRemainingMenuOptions(options, '1')
+  const message = formatContextualFollowUpMessage(options, '1')
+
+  assert.deepEqual(remainingOptions.map(option => option.key), ['2', '3', '4'])
+  assert.doesNotMatch(message, /1 - Requerimento Acadêmico/)
+  assert.match(message, /2 - Requerimento Diploma Técnico/)
+  assert.match(message, /3 - Requerimento Superior/)
+  assert.match(message, /4 - Termo de Desistência/)
+  assert.match(message, /0 - Voltar ao Menu Principal/)
+  assert.match(message, /encerrar - Terminar conversa/)
+})
+
+runTest('mapeia categorias de PPC para carregamento dinâmico futuro', () => {
+  assert.equal(getPpcCategoryCodeByState('curso_eng_comp'), 'ppc_eng_comp')
+  assert.equal(getPpcCategoryCodeByState('curso_bach_adm'), 'ppc_bach_adm')
+  assert.equal(getPpcCategoryCodeByState('curso_lic_fis'), 'ppc_lic_fis')
+  assert.equal(getPpcCategoryCodeByState('curso_grad_tce'), 'ppc_grad_tce')
+  assert.equal(getPpcCategoryCodeByState('curso_eng_civil'), 'ppc_eng_civil')
+})
+
+runTest('mensagens do suporte orientam envio e confirmação', () => {
+  assert.match(formatSupportPrompt(), /Descreva sua dúvida ou solicitação/)
+  assert.match(formatSupportAcknowledgement(), /Sua mensagem foi registrada/)
+})
+
+runTest('lista até 10 editais em andamento do IFMA', () => {
+  const message = formatOpenNoticesMessage()
+
+  assert.equal(openNotices.length, 10)
+  assert.match(message, /Edital Nº 143\/2026/)
+  assert.match(message, /Edital Nº 30\/2026/)
+  assert.match(message, /Fonte: https:\/\/processoseletivo\.ifma\.edu\.br\//)
+})
+
+await runAsyncTest('socket fake captura mensagem de fallback sem WhatsApp real', async () => {
+  const { sock, messages } = createFakeSocket()
+  await sendUnknownMessage(sock, 'user@s.whatsapp.net', 'main')
+
+  assert.equal(messages.length, 1)
+  assert.equal(messages[0].jid, 'user@s.whatsapp.net')
+  assert.match(messages[0].content.text, /Não entendi essa mensagem/)
+  assert.match(messages[0].content.text, /1 - Biblioteca/)
 })
 
 console.log('Todos os testes passaram.')

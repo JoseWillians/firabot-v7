@@ -127,12 +127,16 @@ export async function saveLog(phoneNumber: string, userName: string, message: st
  * Em caso de erro, retorna lista vazia: o documentService registra o problema e
  * aplica fallback local para não interromper o atendimento.
  */
-export async function getActiveDocs(): Promise<any[]> {
+export async function getActiveDocs(categoryCode?: string): Promise<any[]> {
     try {
-        // Busca apenas os documentos com is_active = 1 e os ordena pelo ID
-        const [rows] = await pool.execute(
-            'SELECT name, path FROM docs WHERE is_active = 1 ORDER BY id ASC'
-        );
+        const [rows] = categoryCode
+            ? await pool.execute(
+                'SELECT name, path, category_code, category_label, sort_order, summary FROM docs WHERE is_active = 1 AND category_code = ? ORDER BY COALESCE(sort_order, id), id ASC',
+                [categoryCode]
+            )
+            : await pool.execute(
+                'SELECT name, path, category_code, category_label, sort_order, summary FROM docs WHERE is_active = 1 ORDER BY COALESCE(sort_order, id), id ASC'
+            );
         return rows as any[];
     } catch (error) {
         console.error('Erro ao buscar documentos no banco:', error);

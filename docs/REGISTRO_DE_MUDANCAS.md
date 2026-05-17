@@ -489,7 +489,7 @@ Submenus de Documentos e PPC do Curso.
 
 ### O Que Foi Alterado
 
-O menu `2 - Documentos` deixou de listar PDFs diretamente e passou a pedir primeiro o setor: `1 - Documentos DRCA` e `2 - Documentos CAE`. Os PDFs atuais foram mantidos dentro de `Documentos DRCA`; `Documentos CAE` fica preparado e informa que ainda não há documentos cadastrados. O menu `3 - PPC do Curso` passou a listar quatro cursos, sendo Engenharia de Computação o único com PPCs disponíveis no momento.
+O menu `2 - Documentos` deixou de listar PDFs diretamente e passou a pedir primeiro o setor: `1 - Documentos DRCA` e `2 - Documentos CAE`. Os PDFs atuais foram mantidos dentro de `Documentos DRCA`; `Documentos CAE` fica preparado e informa que ainda não há documentos cadastrados. O menu `3 - PPC do Curso` passou a listar cursos antes de listar os PPCs disponíveis. Em etapa posterior, os PPCs foram organizados por curso em `documentos/ppc`.
 
 ### Por Que Foi Alterado
 
@@ -497,11 +497,11 @@ Para alinhar o bot ao fluxo aprovado, separar setores acadêmicos e preparar a e
 
 ### Impacto Esperado
 
-O usuário passa por uma navegação mais clara: `2 -> 1 -> documento DRCA` para documentos da DRCA, e `3 -> 1 -> PPC` para Engenharia de Computação.
+O usuário passa por uma navegação mais clara: `2 -> 1 -> documento DRCA` para documentos da DRCA, e `3 -> curso -> PPC` para documentos de PPC.
 
 ### Como Testar
 
-Enviar `oi`, depois `2`, depois `1`, depois `3` para validar `Requerimento Superior`. Em seguida enviar `0`, `3`, `1`, `2` para validar o PPC 2024 de Engenharia de Computação.
+Enviar `oi`, depois `2`, depois `1`, depois `3` para validar `Requerimento Superior`. Em seguida enviar `0`, `3`, escolher um curso e selecionar um PPC disponível.
 
 ## Data: 2026-05-15
 
@@ -529,3 +529,134 @@ Rodar `npm run build` e, em banco local recriado pelo schema, conferir:
 DESCRIBE docs;
 SELECT id, name, category_code, category_label, sort_order, is_active FROM docs ORDER BY id;
 ```
+
+## Data: 2026-05-16
+
+### Área Alterada
+
+Arquitetura de fluxo, documentos, PPCs e planejamento de IA.
+
+### O Que Foi Alterado
+
+O `messageHandler.ts` foi enxugado para atuar como coordenador do recebimento das mensagens. A lógica de comandos com `!` foi movida para `src/handlers/commandHandler.ts`; o roteamento de opções numéricas ficou em `src/handlers/menuOptionHandler.ts`; e os fluxos específicos foram separados em `src/flows/conversationFlow.ts`, `src/flows/mainMenuFlow.ts`, `src/flows/documentsFlow.ts`, `src/flows/courseFlow.ts` e `src/flows/documentSendFlow.ts`.
+
+O menu `PPC do Curso` passou a usar os novos PPCs organizados por curso em `documentos/ppc`. Foram adicionados estados semânticos para Administração, Licenciatura em Física, Tecnologia em Construção de Edifícios e Engenharia Civil, além de Engenharia de Computação.
+
+O envio de documentos agora retorna uma mensagem de sucesso com um resumo breve sobre a finalidade do documento. Isso vale para documentos DRCA e PPCs. Também foi criado o documento `docs/PLANO_IA_INTELIGENTE.md` para registrar a estratégia futura de IA do bot.
+
+### Por Que Foi Alterado
+
+Para reduzir o tamanho e a responsabilidade do `messageHandler.ts`, facilitar manutenção por área do fluxo, implementar os PPCs recém-adicionados e melhorar a experiência do estudante após receber um documento.
+
+### Impacto Esperado
+
+O código fica mais modular e mais fácil de evoluir com os subagentes. O usuário consegue escolher PPCs de cursos diferentes, recebe o PDF correto e também entende rapidamente para que aquele documento serve. A IA futura fica planejada sem ser acoplada prematuramente ao core atual.
+
+### Como Testar
+
+Rodar:
+
+```bash
+npm test
+```
+
+Testes manuais recomendados:
+
+1. Enviar `oi`.
+2. Enviar `2`, depois `1`, depois escolher um documento DRCA.
+3. Confirmar PDF enviado e resumo exibido.
+4. Enviar `0`.
+5. Enviar `3`.
+6. Escolher cada curso disponível e validar os PPCs listados.
+7. Escolher um PPC e confirmar PDF enviado com resumo.
+8. Validar `!ping`, `!help` e `!status`.
+
+## Data: 2026-05-16
+
+### Área Alterada
+
+Continuação contextual após documentos e decisão arquitetural de IA.
+
+### O Que Foi Alterado
+
+Após o envio bem-sucedido de um documento, o bot passou a mostrar as outras opções do mesmo submenu, removendo apenas a opção que acabou de ser escolhida. A mensagem mantém `0 - Voltar ao Menu Principal` e `encerrar - Terminar conversa`.
+
+Também foi atualizada a decisão de arquitetura: o core do WhatsApp permanece em TypeScript/Baileys, a IA futura será planejada como serviço Python separado, e Java/Spring Boot fica reservado para backend administrativo em uma fase bem posterior.
+
+Depois da revisão de prioridade, ficou registrado que o painel administrativo vem antes da IA. Foi criado `docs/PLANO_PAINEL_ADMIN.md` para orientar o MVP do painel com administrador principal, administradores setoriais, gestão de documentos, status do bot e auditoria.
+
+### Por Que Foi Alterado
+
+Para reduzir atrito na conversa. Depois de receber um documento, o usuário pode pedir outro item relacionado sem precisar voltar ao menu principal. A decisão sobre Python evita misturar dependências de IA no core do bot e deixa cada tecnologia no papel em que faz mais sentido. A priorização do painel evita começar IA antes de resolver a administração operacional do bot.
+
+### Impacto Esperado
+
+A experiência fica mais fluida em menus de documentos e PPCs. A arquitetura futura fica mais clara para evolução: TypeScript para WhatsApp, Python para IA e Java apenas para backend/admin quando houver necessidade real.
+
+### Como Testar
+
+1. Enviar `oi`.
+2. Enviar `2`, depois `1`.
+3. Escolher `1 - Requerimento Acadêmico`.
+4. Confirmar que o bot envia o PDF, resumo e depois lista `2`, `3`, `4`, `0` e `encerrar`.
+5. Enviar uma das opções restantes e confirmar novo envio.
+6. Repetir com `3 - PPC do Curso`.
+
+## Data: 2026-05-16
+
+### Área Alterada
+
+Suporte, documentos dinâmicos, painel administrativo e testes.
+
+### O Que Foi Alterado
+
+O fluxo `7 - Suporte` passou a pedir uma mensagem livre do usuário. Enquanto não houver administradores setoriais pelo painel, o bot registra essa mensagem e em seguida pergunta se o usuário deseja voltar ao menu principal ou encerrar.
+
+A tabela `docs` foi expandida com `summary`, e o código passou a consultar documentos por `category_code`. Os documentos DRCA e os PPCs foram registrados no schema com categorias próprias, mantendo fallback local para não quebrar o bot caso o banco antigo ainda não tenha todos os campos.
+
+Foi criada a base inicial do painel administrativo no schema com `sectors`, `admin_roles`, `admin_users`, `admin_user_sectors` e `admin_audit_logs`. Também foi adicionado um teste com socket fake para iniciar a cobertura de fluxos sem depender do WhatsApp real.
+
+### Por Que Foi Alterado
+
+Para deixar o suporte coerente com a fase atual do projeto, preparar o painel administrativo antes da IA, reduzir hardcode de documentos/PPCs e começar a testar comportamentos de conversa com um socket falso.
+
+### Impacto Esperado
+
+O usuário consegue registrar uma mensagem de suporte simples. O painel administrativo já tem uma modelagem inicial de permissões por setor. Documentos e PPCs ficam mais próximos de uma gestão dinâmica via banco.
+
+### Como Testar
+
+1. Rodar `npm test`.
+2. No WhatsApp, enviar `oi`, depois `7`, depois uma mensagem de suporte.
+3. Confirmar que o bot registra a mensagem e mostra opções para voltar ou encerrar.
+4. Testar `2 -> 1 -> documento` e `3 -> curso -> PPC`.
+
+## Data: 2026-05-16
+
+### Área Alterada
+
+Links importantes, editais e confirmação do suporte.
+
+### O Que Foi Alterado
+
+O fluxo `4 - Links Importantes` passou a incluir o link direto de login do SUAP: `https://suap.ifma.edu.br/accounts/login/?next=/`.
+
+O fluxo `5 - Editais Abertos` passou a listar até 10 editais em andamento encontrados na página oficial de processos seletivos do IFMA, usando `https://processoseletivo.ifma.edu.br/` como fonte. Após enviar a lista, o bot mostra imediatamente as opções `0 - Voltar ao Menu Principal` e `encerrar - Terminar conversa`.
+
+O fluxo `7 - Suporte` agora muda para o estado `suporte_confirmacao` depois de registrar a primeira mensagem do usuário. Isso evita que mensagens como `oi` ou `menu` fiquem sendo registradas repetidamente como novas solicitações de suporte. Depois do registro, o usuário pode voltar com `0`, encerrar ou reiniciar com `oi/menu`.
+
+### Por Que Foi Alterado
+
+Para corrigir inconsistências vistas em teste real no WhatsApp: editais não ofereciam claramente retorno/encerramento, suporte continuava capturando mensagens repetidas, e Links Importantes ainda não tinha o link direto do login SUAP.
+
+### Impacto Esperado
+
+O usuário tem acesso mais rápido ao SUAP, vê editais oficiais em andamento sem sair do fluxo, e o suporte fica mais previsível após registrar uma solicitação.
+
+### Como Testar
+
+1. Enviar `oi`.
+2. Enviar `4` e conferir se aparece `Login SUAP`.
+3. Enviar `0`.
+4. Enviar `5` e conferir a lista de editais e o follow-up.
+5. Enviar `7`, depois uma mensagem qualquer, e conferir a confirmação + opções para voltar/encerrar.
