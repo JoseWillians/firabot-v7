@@ -3,6 +3,7 @@ node_modules/
 dist/
 auth/
 logs/
+docs/
 *.log
 database/backups/
 graphify-out/
