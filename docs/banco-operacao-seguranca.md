@@ -70,8 +70,8 @@ Variáveis documentadas em `.env.example`:
 | `MESSAGE_START_GRACE_SECONDS` | Tolerância do filtro de mensagens antigas |
 | `SPAM_WINDOW_MS` | Janela anti-spam |
 | `RECONNECT_DELAY_MS` | Atraso de reconexão |
-| `USER_STATE_TTL_MINUTES` | Configuração planejada para expiração de estado |
-| `ADMIN_NUMBERS` | Configuração planejada para comandos administrativos |
+| `USER_STATE_TTL_MINUTES` | Expiração de estado com base em `user_states.updated_at`; `0` desativa |
+| `ADMIN_NUMBERS` | Números autorizados para comandos administrativos |
 | `DB_HOST` | Host do MySQL |
 | `DB_PORT` | Porta do MySQL |
 | `DB_USER` | Usuário do MySQL |
@@ -158,8 +158,8 @@ Pontos de atenção:
 - MySQL em `3306:3306` é adequado para desenvolvimento, mas perigoso em VPS sem restrição.
 - Não há política definida de backup/restore.
 - Não há migrations versionadas.
-- `USER_STATE_TTL_MINUTES` ainda não limpa estados antigos.
-- `ADMIN_NUMBERS` ainda não protege comandos reais.
+- Estados antigos voltam para `main` quando passam de `USER_STATE_TTL_MINUTES`.
+- `!ping` e `!status` exigem número listado em `ADMIN_NUMBERS`.
 - Editais hardcoded podem ficar desatualizados.
 
 ## Checklist Para Produção

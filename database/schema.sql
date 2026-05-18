@@ -12,6 +12,51 @@ CREATE DATABASE IF NOT EXISTS firabot
 
 USE firabot;
 
+-- Helper idempotente para reaplicar o schema em bancos locais já existentes.
+-- MySQL não aceita CREATE INDEX IF NOT EXISTS em todas as versões 8.x.
+DELIMITER //
+DROP PROCEDURE IF EXISTS add_index_if_missing//
+CREATE PROCEDURE add_index_if_missing(
+  IN p_table_name VARCHAR(64),
+  IN p_index_name VARCHAR(64),
+  IN p_create_sql TEXT
+)
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+      FROM information_schema.statistics
+     WHERE table_schema = DATABASE()
+       AND table_name = p_table_name
+       AND index_name = p_index_name
+  ) THEN
+    SET @index_sql = p_create_sql;
+    PREPARE stmt FROM @index_sql;
+    EXECUTE stmt;
+    DEALLOCATE PREPARE stmt;
+  END IF;
+END//
+DROP PROCEDURE IF EXISTS add_column_if_missing//
+CREATE PROCEDURE add_column_if_missing(
+  IN p_table_name VARCHAR(64),
+  IN p_column_name VARCHAR(64),
+  IN p_alter_sql TEXT
+)
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+      FROM information_schema.columns
+     WHERE table_schema = DATABASE()
+       AND table_name = p_table_name
+       AND column_name = p_column_name
+  ) THEN
+    SET @column_sql = p_alter_sql;
+    PREPARE stmt FROM @column_sql;
+    EXECUTE stmt;
+    DEALLOCATE PREPARE stmt;
+  END IF;
+END//
+DELIMITER ;
+
 -- =========================================================
 -- 1. TABELA DE USUÁRIOS
 -- Guarda os usuários que já conversaram com o bot.
@@ -41,7 +86,7 @@ CREATE TABLE IF NOT EXISTS user_states (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Índice auxiliar para consultas por estado, útil em debug/relatórios.
-CREATE INDEX idx_user_states_state ON user_states (state);
+CALL add_index_if_missing('user_states', 'idx_user_states_state', 'CREATE INDEX idx_user_states_state ON user_states (state)');
 
 -- =========================================================
 -- 3. TABELA DE LOGS
@@ -70,10 +115,10 @@ CREATE TABLE IF NOT EXISTS logs (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Índices para facilitar auditoria e consultas recentes.
-CREATE INDEX idx_logs_user_id ON logs (user_id);
-CREATE INDEX idx_logs_created_at ON logs (created_at);
-CREATE INDEX idx_logs_event_type ON logs (event_type);
-CREATE INDEX idx_logs_success ON logs (success);
+CALL add_index_if_missing('logs', 'idx_logs_user_id', 'CREATE INDEX idx_logs_user_id ON logs (user_id)');
+CALL add_index_if_missing('logs', 'idx_logs_created_at', 'CREATE INDEX idx_logs_created_at ON logs (created_at)');
+CALL add_index_if_missing('logs', 'idx_logs_event_type', 'CREATE INDEX idx_logs_event_type ON logs (event_type)');
+CALL add_index_if_missing('logs', 'idx_logs_success', 'CREATE INDEX idx_logs_success ON logs (success)');
 
 -- =========================================================
 -- 4. TABELA DINÂMICA DE DOCUMENTOS
@@ -126,7 +171,74 @@ ON DUPLICATE KEY UPDATE
     updated_at = CURRENT_TIMESTAMP;
 
 -- =========================================================
--- 6. BASE DO PAINEL ADMINISTRATIVO
+-- 6. LINKS IMPORTANTES ADMINISTRÁVEIS
+-- Conteúdo simples exibível pelo painel e preparado para futura leitura pelo bot.
+-- Não armazena credenciais nem HTML livre.
+-- =========================================================
+CREATE TABLE IF NOT EXISTS important_links (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    title VARCHAR(180) NOT NULL,
+    url VARCHAR(500) NOT NULL,
+    scope VARCHAR(80) NOT NULL DEFAULT 'Global',
+    sector_code VARCHAR(50),
+    sector_label VARCHAR(100),
+    sort_order INT,
+    is_active TINYINT(1) NOT NULL DEFAULT 1,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_important_links_url (url),
+    INDEX idx_important_links_active_sort (is_active, sort_order, id),
+    INDEX idx_important_links_sector_active_sort (sector_code, is_active, sort_order, id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+INSERT INTO important_links (id, title, url, scope, sector_code, sector_label, sort_order, is_active) VALUES
+(1, 'SUAP IFMA', 'https://suap.ifma.edu.br/accounts/login/?next=/', 'Global', NULL, 'Global', 1, 1),
+(2, 'Campus Santa Inês', 'https://santaines.ifma.edu.br/', 'Global', NULL, 'Global', 2, 1)
+ON DUPLICATE KEY UPDATE
+    title = VALUES(title),
+    scope = VALUES(scope),
+    sector_code = VALUES(sector_code),
+    sector_label = VALUES(sector_label),
+    sort_order = VALUES(sort_order),
+    is_active = VALUES(is_active),
+    updated_at = CURRENT_TIMESTAMP;
+
+-- =========================================================
+-- 7. EDITAIS ADMINISTRÁVEIS
+-- Cadastro curado de editais enquanto a sincronização automática não existe.
+-- =========================================================
+CREATE TABLE IF NOT EXISTS notices (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    title VARCHAR(255) NOT NULL,
+    url VARCHAR(500),
+    status VARCHAR(80) NOT NULL,
+    source VARCHAR(180) NOT NULL,
+    sector_code VARCHAR(50),
+    sector_label VARCHAR(100),
+    sort_order INT,
+    is_active TINYINT(1) NOT NULL DEFAULT 1,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_notices_url (url),
+    INDEX idx_notices_active_sort (is_active, sort_order, id),
+    INDEX idx_notices_sector_active_sort (sector_code, is_active, sort_order, id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+INSERT INTO notices (id, title, url, status, source, sector_code, sector_label, sort_order, is_active) VALUES
+(1, 'Editais disponíveis no campus', 'https://processoseletivo.ifma.edu.br/', 'Ativo', 'Site oficial do campus', NULL, 'Global', 1, 1),
+(2, 'Sincronização automática de editais', NULL, 'Futuro', 'Roadmap', NULL, 'Global', 2, 0)
+ON DUPLICATE KEY UPDATE
+    title = VALUES(title),
+    status = VALUES(status),
+    source = VALUES(source),
+    sector_code = VALUES(sector_code),
+    sector_label = VALUES(sector_label),
+    sort_order = VALUES(sort_order),
+    is_active = VALUES(is_active),
+    updated_at = CURRENT_TIMESTAMP;
+
+-- =========================================================
+-- 8. BASE DO PAINEL ADMINISTRATIVO
 -- Estrutura inicial para RBAC por setor. O painel tem prioridade antes da IA
 -- e deve permitir que cada administrador gerencie apenas sua área.
 -- =========================================================
@@ -152,6 +264,7 @@ CREATE TABLE IF NOT EXISTS admin_users (
     id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(150) NOT NULL,
     email VARCHAR(180) UNIQUE NOT NULL,
+    enrollment_code VARCHAR(50) UNIQUE,
     password_hash VARCHAR(255) NOT NULL,
     role_id INT NOT NULL,
     is_active TINYINT(1) NOT NULL DEFAULT 1,
@@ -160,6 +273,13 @@ CREATE TABLE IF NOT EXISTS admin_users (
     CONSTRAINT fk_admin_users_role
       FOREIGN KEY (role_id) REFERENCES admin_roles(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Compatibilidade para bancos criados antes do login por matrícula.
+CALL add_column_if_missing(
+  'admin_users',
+  'enrollment_code',
+  'ALTER TABLE admin_users ADD COLUMN enrollment_code VARCHAR(50) UNIQUE AFTER email'
+);
 
 CREATE TABLE IF NOT EXISTS admin_user_sectors (
     admin_user_id INT NOT NULL,
@@ -189,6 +309,30 @@ CREATE TABLE IF NOT EXISTS admin_audit_logs (
     INDEX idx_admin_audit_action (action)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- =========================================================
+-- 9. FILA DE SUPORTE SETORIAL
+-- Guarda solicitações abertas pelo fluxo "7 - Suporte".
+-- A mensagem é salva como preview operacional para reduzir exposição de dados
+-- pessoais no painel enquanto a política de retenção final não é definida.
+-- =========================================================
+CREATE TABLE IF NOT EXISTS support_tickets (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT,
+    sector_code VARCHAR(50) NOT NULL DEFAULT 'suporte',
+    sector_label VARCHAR(100) NOT NULL DEFAULT 'Suporte',
+    status VARCHAR(40) NOT NULL DEFAULT 'novo',
+    message_preview VARCHAR(500) NOT NULL,
+    internal_note VARCHAR(500),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    resolved_at TIMESTAMP NULL,
+    CONSTRAINT fk_support_tickets_user
+      FOREIGN KEY (user_id) REFERENCES users(id)
+      ON DELETE SET NULL,
+    INDEX idx_support_tickets_status_created (status, created_at),
+    INDEX idx_support_tickets_sector_status (sector_code, status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 INSERT INTO sectors (code, name, description, is_active) VALUES
 ('drca', 'DRCA', 'Documentos e informações de registro e controle acadêmico.', 1),
 ('cae', 'CAE', 'Atendimento estudantil e documentos da assistência estudantil.', 1),
@@ -205,3 +349,6 @@ INSERT INTO admin_roles (code, name, description) VALUES
 ON DUPLICATE KEY UPDATE
     name = VALUES(name),
     description = VALUES(description);
+
+DROP PROCEDURE IF EXISTS add_index_if_missing;
+DROP PROCEDURE IF EXISTS add_column_if_missing;

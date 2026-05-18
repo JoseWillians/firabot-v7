@@ -2,6 +2,7 @@ import { WASocket } from 'baileys'
 import { docsCategoryMenu } from '../menus/docsMenu.js'
 import { formatOpenNoticesMessage } from '../menus/noticesMenu.js'
 import { UserState } from '../menus/types.js'
+import { formatImportantLinksMessage } from '../services/importantLinkService.js'
 import { botLog, registerUserLog } from '../services/logService.js'
 import { formatCourseMenu, formatMainMenu, formatMenu } from '../services/menuService.js'
 import { updateUserState } from '../services/userStateService.js'
@@ -39,14 +40,14 @@ export async function processMainOption(sock: WASocket, userJid: string, userNam
     }
 
     case '4':
-      await sock.sendMessage(userJid, { text: '🔗 *Links Importantes*\n\nSUAP: https://suap.ifma.edu.br\nLogin SUAP: https://suap.ifma.edu.br/accounts/login/?next=/\nCampus Santa Inês: https://santaines.ifma.edu.br/' })
+      await sock.sendMessage(userJid, { text: await formatImportantLinksMessage() })
       await sendFollowUp(sock, userJid, 0)
       await updateUserState(userJid, 'links')
       await registerUserLog(userJid, userName, 'Menu principal: Links Importantes', currentState, 'MENU_OPTION_SELECTED', { menu: 'menu principal', stateAfter: 'links', success: true })
       break
 
     case '5':
-      await sock.sendMessage(userJid, { text: formatOpenNoticesMessage() })
+      await sock.sendMessage(userJid, { text: await formatOpenNoticesMessage() })
       await sendFollowUp(sock, userJid, 0)
       await updateUserState(userJid, 'editais')
       await registerUserLog(userJid, userName, 'Menu principal: Editais Abertos', currentState, 'MENU_OPTION_SELECTED', { menu: 'menu principal', stateAfter: 'editais', success: true })

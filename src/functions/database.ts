@@ -2,6 +2,25 @@ import mysql from 'mysql2/promise';
 import { config } from '../config.js';
 import type { BotEventType, UserLogDetails } from '../services/logService.js';
 
+export interface ActiveLinkRecord {
+    title: string;
+    url: string;
+    scope?: string | null;
+    sector_code?: string | null;
+    sector_label?: string | null;
+    sort_order?: number | null;
+}
+
+export interface ActiveNoticeRecord {
+    title: string;
+    url?: string | null;
+    status: string;
+    source: string;
+    sector_code?: string | null;
+    sector_label?: string | null;
+    sort_order?: number | null;
+}
+
 const pool = mysql.createPool({
     host: config.database.host,
     port: config.database.port,
@@ -23,6 +42,26 @@ function explainDatabaseConnectionError(error: unknown) {
     }
 
     return 'Falha ao conectar ao MySQL. Verifique DB_HOST, DB_PORT, DB_USER, DB_PASSWORD e DB_NAME no .env.';
+}
+
+function formatDatabaseError(error: unknown) {
+    if (error instanceof Error) return error.message;
+    return String(error);
+}
+
+function databaseErrorLog(message: string, error: unknown) {
+    /**
+     * Este módulo não importa logService em runtime porque logService depende
+     * de saveLog(), o que criaria ciclo. Mantemos o console estruturado aqui e
+     * sem payloads sensíveis até separar um logger técnico independente.
+     */
+    console.error(JSON.stringify({
+        at: new Date().toISOString(),
+        level: 'error',
+        eventType: 'DATABASE_ERROR',
+        message,
+        error: formatDatabaseError(error)
+    }));
 }
 
 /**
@@ -66,15 +105,22 @@ async function getUserId(phoneNumber: string, fullName?: string): Promise<number
  * em memória, sem mascarar problemas de banco como se fossem estado "main".
  */
 export async function getUserState(phoneNumber: string): Promise<string> {
+    const record = await getUserStateRecord(phoneNumber);
+    return record.state;
+}
+
+export async function getUserStateRecord(phoneNumber: string): Promise<{ state: string; updatedAt: Date | null }> {
     try {
         const userId = await getUserId(phoneNumber);
         const [rows]: any = await pool.execute(
-            'SELECT state FROM user_states WHERE user_id = ?',
+            'SELECT state, updated_at FROM user_states WHERE user_id = ?',
             [userId]
         );
-        return rows.length > 0 ? rows[0].state : 'main';
+        return rows.length > 0
+            ? { state: rows[0].state, updatedAt: rows[0].updated_at ? new Date(rows[0].updated_at) : null }
+            : { state: 'main', updatedAt: null };
     } catch (error) {
-        console.error("Erro ao obter estado do usuário:", error);
+        databaseErrorLog('Erro ao obter estado do usuário', error);
         throw error;
     }
 }
@@ -84,11 +130,11 @@ export async function setUserState(phoneNumber: string, state: string): Promise<
         const userId = await getUserId(phoneNumber);
         await pool.execute(
             `INSERT INTO user_states (user_id, state) VALUES (?, ?) 
-             ON DUPLICATE KEY UPDATE state = ?`,
+             ON DUPLICATE KEY UPDATE state = ?, updated_at = CURRENT_TIMESTAMP`,
             [userId, state, state]
         );
     } catch (error) {
-        console.error("Erro ao definir estado:", error);
+        databaseErrorLog('Erro ao definir estado do usuário', error);
         throw error;
     }
 }
@@ -116,7 +162,27 @@ export async function saveLog(phoneNumber: string, userName: string, message: st
             ]
         );
     } catch (error) {
-        console.error("Erro ao salvar log:", error);
+        databaseErrorLog('Erro ao salvar log', error);
+        throw error;
+    }
+}
+
+/**
+ * Registra a solicitação de suporte em uma fila própria para o painel.
+ * Guardamos apenas um preview limitado da mensagem para reduzir exposição de
+ * dados pessoais até existir política institucional de retenção e tratamento.
+ */
+export async function createSupportTicket(phoneNumber: string, userName: string, message: string): Promise<void> {
+    try {
+        const userId = await getUserId(phoneNumber, userName);
+        const preview = message.trim().slice(0, 500);
+        await pool.execute(
+            `INSERT INTO support_tickets (user_id, sector_code, sector_label, status, message_preview)
+             VALUES (?, 'suporte', 'Suporte', 'novo', ?)`,
+            [userId, preview || 'Solicitação registrada pelo bot.']
+        );
+    } catch (error) {
+        databaseErrorLog('Erro ao criar chamado de suporte', error);
         throw error;
     }
 }
@@ -127,7 +193,7 @@ export async function saveLog(phoneNumber: string, userName: string, message: st
  * Em caso de erro, retorna lista vazia: o documentService registra o problema e
  * aplica fallback local para não interromper o atendimento.
  */
-export async function getActiveDocs(categoryCode?: string): Promise<any[]> {
+export async function getActiveDocs(categoryCode?: string, options: { throwOnError?: boolean } = {}): Promise<any[]> {
     try {
         const [rows] = categoryCode
             ? await pool.execute(
@@ -139,7 +205,8 @@ export async function getActiveDocs(categoryCode?: string): Promise<any[]> {
             );
         return rows as any[];
     } catch (error) {
-        console.error('Erro ao buscar documentos no banco:', error);
+        databaseErrorLog('Erro ao buscar documentos no banco', error);
+        if (options.throwOnError) throw error;
         return []; // Retorna lista vazia em caso de erro para não travar o bot
     }
 }
@@ -151,7 +218,50 @@ export async function countActiveDocs(): Promise<number> {
         );
         return Number(rows[0]?.total || 0);
     } catch (error) {
-        console.error('Erro ao contar documentos ativos:', error);
+        databaseErrorLog('Erro ao contar documentos ativos', error);
         throw error;
+    }
+}
+
+/**
+ * Links importantes também são conteúdo administrável pelo painel.
+ * O bot lê a tabela em tempo de execução para que inclusões feitas pelo painel
+ * apareçam sem alteração de código, mantendo fallback no fluxo de menu.
+ */
+export async function getActiveImportantLinks(options: { throwOnError?: boolean } = {}): Promise<ActiveLinkRecord[]> {
+    try {
+        const [rows] = await pool.execute(
+            `SELECT title, url, scope, sector_code, sector_label, sort_order
+               FROM important_links
+              WHERE is_active = 1
+              ORDER BY COALESCE(sort_order, id), id ASC`
+        );
+        return rows as ActiveLinkRecord[];
+    } catch (error) {
+        databaseErrorLog('Erro ao buscar links importantes no banco', error);
+        if (options.throwOnError) throw error;
+        return [];
+    }
+}
+
+/**
+ * Editais cadastrados no painel são a fonte dinâmica preferencial.
+ * A lista local continua existindo apenas como fallback quando o banco ainda
+ * não tem dados suficientes ou está temporariamente indisponível.
+ */
+export async function getActiveNotices(options: { throwOnError?: boolean } = {}): Promise<ActiveNoticeRecord[]> {
+    try {
+        const [rows] = await pool.execute(
+            `SELECT title, url, status, source, sector_code, sector_label, sort_order
+               FROM notices
+              WHERE is_active = 1
+              ORDER BY COALESCE(sort_order, id), id ASC
+              LIMIT 10`
+        );
+        return rows as ActiveNoticeRecord[];
+    } catch (error) {
+        databaseErrorLog('Erro ao buscar editais no banco', error);
+        if (options.throwOnError) throw error;
+        return [];
     }
 }

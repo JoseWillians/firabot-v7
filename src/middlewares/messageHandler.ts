@@ -9,6 +9,7 @@ import { botLog, debugLog, registerUserLog } from '../services/logService.js'
 import { canRespondToUser } from '../services/spamGuardService.js'
 import { extractMessageText } from '../services/messageTextService.js'
 import { isNumericOption } from '../services/menuService.js'
+import { shouldCaptureSupportMessage } from '../services/menuRoutingService.js'
 import {
   getMessageTimestamp,
   isGreetingOrStartMessage,
@@ -54,7 +55,8 @@ export const messageHandler = async (sock: WASocket, m: { messages: proto.IWebMe
   const currentState = await getCurrentUserState(userJid)
   botLog('MESSAGE_RECEIVED', 'Mensagem recebida', {
     user: userJid,
-    text: body,
+    messageLength: body.length,
+    isCommand: isPrefixedCommand(body),
     stateBefore: currentState
   })
 
@@ -69,12 +71,7 @@ export const messageHandler = async (sock: WASocket, m: { messages: proto.IWebMe
   }
 
   if (!canRespondToUser(`${userJid}:${body.toLowerCase()}`)) {
-    debugLog('Resposta ignorada por proteção anti-spam', { eventType: 'RATE_LIMITED', user: userJid, body })
-    return
-  }
-
-  if (isNumericOption(body)) {
-    await processMenuOption(sock, userJid, userName, body, currentState)
+    debugLog('Resposta ignorada por proteção anti-spam', { eventType: 'RATE_LIMITED', user: userJid, messageLength: body.length })
     return
   }
 
@@ -83,11 +80,16 @@ export const messageHandler = async (sock: WASocket, m: { messages: proto.IWebMe
     return
   }
 
-  if (currentState === 'suporte') {
+  if (shouldCaptureSupportMessage(currentState, body)) {
     await handleSupportMessage(sock, userJid, userName, body, currentState)
     return
   }
 
+  if (isNumericOption(body)) {
+    await processMenuOption(sock, userJid, userName, body, currentState)
+    return
+  }
+
   await sendUnknownMessage(sock, userJid, currentState)
-  await registerUserLog(userJid, userName, `Mensagem não compreendida: ${body}`, currentState, 'INVALID_OPTION', { stateBefore: currentState, success: false })
+  await registerUserLog(userJid, userName, `Mensagem não compreendida (${body.length} caracteres)`, currentState, 'INVALID_OPTION', { stateBefore: currentState, success: false })
 }

@@ -1,4 +1,5 @@
 import * as fs from 'fs'
+import { promises as fsPromises } from 'fs'
 import * as path from 'path'
 import { WASocket } from 'baileys'
 import { getActiveDocs } from '../functions/database.js'
@@ -21,19 +22,45 @@ export interface DocumentSendResult {
 }
 
 export interface DocumentsHealth {
+  ok: boolean
   totalActive: number
   found: number
   missing: number
   missingDocuments: ActiveDocument[]
+  errorMessage?: string
 }
 
 function resolveDocumentPath(documentPath: string) {
-  if (path.isAbsolute(documentPath)) return path.resolve(documentPath)
-  if (documentPath.startsWith('./documentos') || documentPath.startsWith('documentos')) {
-    return path.resolve(documentPath)
-  }
+  const basePath = path.resolve(config.documentsBasePath)
+  const resolvedPath = path.isAbsolute(documentPath)
+    ? path.resolve(documentPath)
+    : documentPath.startsWith('./documentos') || documentPath.startsWith('documentos')
+      ? path.resolve(documentPath)
+      : path.resolve(basePath, documentPath)
 
-  return path.resolve(config.documentsBasePath, documentPath)
+  return resolvedPath
+}
+
+export function resolveSafeDocumentPath(documentPath: string) {
+  const basePath = path.resolve(config.documentsBasePath)
+  const resolvedPath = resolveDocumentPath(documentPath)
+  const relativePath = path.relative(basePath, resolvedPath)
+  const isInsideDocumentsDir = relativePath === '' || (!relativePath.startsWith('..') && !path.isAbsolute(relativePath))
+
+  return {
+    absolutePath: resolvedPath,
+    isInsideDocumentsDir
+  }
+}
+
+async function getDocumentsForHealthcheck(): Promise<ActiveDocument[]> {
+  const docs = await getActiveDocs(undefined, { throwOnError: true })
+  return docs.map((doc: { name: string; path: string; summary?: string }, index: number) => ({
+    key: String(index + 1),
+    label: doc.name,
+    path: doc.path,
+    summary: doc.summary || getDocumentSummary(doc.name, doc.path)
+  }))
 }
 
 function mapFallbackDocuments(): ActiveDocument[] {
@@ -89,17 +116,17 @@ export async function getAvailableDocuments(categoryCode = 'drca'): Promise<Acti
     }))
   } catch (error) {
     errorLog('DATABASE_ERROR', 'Erro ao carregar documentos ativos. Usando lista local de fallback', error)
-    return mapFallbackDocuments()
+    return categoryCode === 'drca' ? mapFallbackDocuments() : []
   }
 }
 
-export async function formatDocumentsMenu() {
-  const documents = await getAvailableDocuments('drca')
-  return formatMenu(createDocsMenu(documents))
+export async function formatDocumentsMenu(categoryCode = 'drca', title?: string) {
+  const documents = await getAvailableDocuments(categoryCode)
+  return formatMenu(createDocsMenu(documents, title))
 }
 
-export async function findDocumentByOption(option: string): Promise<ActiveDocument | undefined> {
-  const documents = await getAvailableDocuments('drca')
+export async function findDocumentByOption(option: string, categoryCode = 'drca'): Promise<ActiveDocument | undefined> {
+  const documents = await getAvailableDocuments(categoryCode)
   return documents.find(doc => doc.key === option)
 }
 
@@ -110,8 +137,26 @@ export function formatDocumentSuccessMessage(document: ActiveDocument) {
 }
 
 export async function checkDocumentsHealth(): Promise<DocumentsHealth> {
-  const documents = await getAvailableDocuments()
-  const missingDocuments = documents.filter(document => !fs.existsSync(resolveDocumentPath(document.path)))
+  let documents: ActiveDocument[]
+
+  try {
+    documents = await getDocumentsForHealthcheck()
+  } catch (error) {
+    errorLog('DATABASE_ERROR', 'Erro ao carregar documentos para healthcheck', error)
+    return {
+      ok: false,
+      totalActive: 0,
+      found: 0,
+      missing: 0,
+      missingDocuments: [],
+      errorMessage: error instanceof Error ? error.message : 'Erro ao carregar documentos para healthcheck'
+    }
+  }
+
+  const missingDocuments = documents.filter(document => {
+    const resolved = resolveSafeDocumentPath(document.path)
+    return !resolved.isInsideDocumentsDir || !fs.existsSync(resolved.absolutePath)
+  })
 
   debugLog('Healthcheck de documentos concluído', {
     eventType: missingDocuments.length ? 'DOCUMENT_ERROR' : 'DOCUMENT_HEALTH',
@@ -122,6 +167,7 @@ export async function checkDocumentsHealth(): Promise<DocumentsHealth> {
   })
 
   return {
+    ok: true,
     totalActive: documents.length,
     found: documents.length - missingDocuments.length,
     missing: missingDocuments.length,
@@ -130,18 +176,50 @@ export async function checkDocumentsHealth(): Promise<DocumentsHealth> {
 }
 
 export async function sendDocument(sock: WASocket, jid: string, document: ActiveDocument): Promise<DocumentSendResult> {
-  const filePath = resolveDocumentPath(document.path)
+  const resolved = resolveSafeDocumentPath(document.path)
+  const filePath = resolved.absolutePath
 
   try {
+    /**
+     * Paths cadastrados no banco nunca podem escapar de DOCUMENTS_DIR.
+     * Essa proteção é essencial antes do painel administrativo permitir upload
+     * ou edição de documentos por administradores setoriais.
+     */
+    if (!resolved.isInsideDocumentsDir) {
+      await sock.sendMessage(jid, { text: 'Encontrei essa opção, mas o caminho do arquivo está inválido. Entre em contato com o suporte.' })
+      errorLog('DOCUMENT_ERROR', 'Caminho de documento fora da pasta permitida', new Error('Caminho fora de DOCUMENTS_DIR'), { user: jid, documentId: document.key, document })
+      debugLog('Caminho absoluto de documento bloqueado', { eventType: 'DOCUMENT_ERROR', user: jid, documentId: document.key, absolutePath: filePath })
+      return { success: false, absolutePath: filePath, errorMessage: 'Caminho de documento fora da pasta permitida' }
+    }
+
     if (!fs.existsSync(filePath)) {
       await sock.sendMessage(jid, { text: 'Encontrei essa opção, mas o arquivo não está disponível no servidor agora. Tente novamente mais tarde ou entre em contato com o suporte.' })
-      errorLog('DOCUMENT_ERROR', 'Documento não encontrado no servidor', new Error(filePath), { user: jid, documentId: document.key, document })
+      errorLog('DOCUMENT_ERROR', 'Documento não encontrado no servidor', new Error('Arquivo não encontrado no servidor'), { user: jid, documentId: document.key, document })
       debugLog('Caminho absoluto de documento ausente', { eventType: 'DOCUMENT_ERROR', user: jid, documentId: document.key, absolutePath: filePath })
       return { success: false, absolutePath: filePath, errorMessage: 'Arquivo não encontrado no servidor' }
     }
 
+    const baseRealPath = await fsPromises.realpath(path.resolve(config.documentsBasePath))
+    const fileRealPath = await fsPromises.realpath(filePath)
+    const realRelativePath = path.relative(baseRealPath, fileRealPath)
+    const isRealPathInsideDocumentsDir = realRelativePath === '' || (!realRelativePath.startsWith('..') && !path.isAbsolute(realRelativePath))
+    if (!isRealPathInsideDocumentsDir) {
+      await sock.sendMessage(jid, { text: 'Encontrei essa opção, mas o arquivo aponta para um local não permitido. Entre em contato com o suporte.' })
+      errorLog('DOCUMENT_ERROR', 'Documento usa link simbólico ou caminho real fora da pasta permitida', new Error('Caminho real fora de DOCUMENTS_DIR'), { user: jid, documentId: document.key, document })
+      debugLog('Caminho real absoluto de documento bloqueado', { eventType: 'DOCUMENT_ERROR', user: jid, documentId: document.key, absolutePath: fileRealPath })
+      return { success: false, absolutePath: filePath, errorMessage: 'Caminho real fora da pasta permitida' }
+    }
+
+    const stats = await fsPromises.stat(filePath)
+    const maxSizeBytes = config.documentMaxSizeMb * 1024 * 1024
+    if (stats.size > maxSizeBytes) {
+      await sock.sendMessage(jid, { text: 'Encontrei essa opção, mas o arquivo está maior que o limite permitido para envio automático. Entre em contato com o suporte.' })
+      errorLog('DOCUMENT_ERROR', 'Documento maior que o limite permitido', new Error('Documento maior que o limite permitido'), { user: jid, documentId: document.key, sizeBytes: stats.size, maxSizeBytes })
+      return { success: false, absolutePath: filePath, errorMessage: 'Documento maior que o limite permitido' }
+    }
+
     await sock.sendMessage(jid, {
-      document: fs.readFileSync(filePath),
+      document: await fsPromises.readFile(filePath),
       mimetype: 'application/pdf',
       fileName: `${document.label}.pdf`
     })

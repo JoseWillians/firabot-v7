@@ -30,3 +30,12 @@ export function getMenuRouteForOption(currentState: UserState, option: string): 
   if (currentState === 'curso_eng_civil') return 'curso_eng_civil'
   return 'main'
 }
+
+export function shouldCaptureSupportMessage(currentState: UserState, text: string) {
+  /**
+   * No suporte, mensagens numéricas podem ser matrícula, protocolo ou telefone.
+   * Só deixamos o "0" seguir para o roteador numérico porque ele é o comando
+   * explícito de voltar ao menu principal.
+   */
+  return currentState === 'suporte' && text.trim() !== '0'
+}

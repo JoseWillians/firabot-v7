@@ -11,7 +11,7 @@ Confirmado parcialmente no código. O projeto usa MySQL para estado de usuarios 
 - Depois de escolher `2 - Documentos`, a proxima opcao numerica deve ser interpretada dentro do menu de documentos.
 - Enviar `oi` em qualquer estado deve resetar para `main`.
 - `encerrar` e `!encerrar` salvam estado `encerrado`.
-- `USER_STATE_TTL_MINUTES` existe como variavel planejada para expiracao futura de estado.
+- `USER_STATE_TTL_MINUTES` expira estados antigos usando `user_states.updated_at`; `0` desativa a expiração.
 
 ## Estados atuais no código
 
@@ -32,7 +32,7 @@ Confirmado parcialmente no código. O projeto usa MySQL para estado de usuarios 
 
 - [x] Confirmar nomes reais dos estados persistidos.
 - [x] Confirmar se `main` e o estado inicial real.
-- [ ] Confirmar se `USER_STATE_TTL_MINUTES` ja e aplicado ou apenas planejado.
+- [x] Confirmar aplicação de `USER_STATE_TTL_MINUTES` no estado persistido.
 - [ ] Confirmar comportamento apos reinicio do processo.
 - [ ] Confirmar se estados antigos sao limpos por rotina ou manualmente.
 - [ ] Confirmar constraints/indices da tabela `user_states`.

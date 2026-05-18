@@ -11,7 +11,9 @@ export type BotEventType =
   | 'MESSAGE_IGNORED_OLD'
   | 'MESSAGE_IGNORED_SELF'
   | 'MESSAGE_IGNORED_GROUP'
+  | 'SUPPORT_REQUEST'
   | 'COMMAND_EXECUTED'
+  | 'COMMAND_DENIED'
   | 'COMMAND_UNKNOWN'
   | 'MENU_OPENED'
   | 'MENU_OPTION_SELECTED'
@@ -53,6 +55,7 @@ export interface UserLogDetails {
 }
 
 const sensitiveKeys = new Set(['password', 'token', 'qr', 'secret', 'authorization'])
+const userContentKeys = new Set(['body', 'text', 'message', 'content'])
 
 export function maskPhone(value: string) {
   const digits = value.replace(/\D/g, '')
@@ -74,7 +77,11 @@ function sanitizeContext(context?: TechnicalLogContext) {
 
   return Object.fromEntries(
     Object.entries(context).map(([key, value]) => {
-      if (sensitiveKeys.has(key.toLowerCase())) return [key, '[REDACTED]']
+      const normalizedKey = key.toLowerCase()
+      if (sensitiveKeys.has(normalizedKey)) return [key, '[REDACTED]']
+      if (userContentKeys.has(normalizedKey) && typeof value === 'string') {
+        return [key, `[USER_CONTENT_REDACTED:${value.length}]`]
+      }
       if (key === 'user' && typeof value === 'string') return [key, maskPhone(value)]
       if (key === 'error') return [key, normalizeError(value)]
       return [key, value]

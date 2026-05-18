@@ -20,9 +20,21 @@ npm test
 O comando executa:
 
 1. `npm run build`
-2. `node tests/run-tests.mjs`
+2. `npm run test:no-build`
 
 Atenção: isso gera/atualiza `dist/`.
+
+Para repetir somente a suíte sobre o `dist/` já compilado:
+
+```powershell
+npm run test:no-build
+```
+
+Para rodar a validação local equivalente ao CI:
+
+```powershell
+npm run ci:local
+```
 
 ## Banco Local
 
@@ -36,6 +48,12 @@ Verificar container:
 
 ```powershell
 docker ps --filter "name=firabot-mysql"
+```
+
+Verificar healthcheck do MySQL:
+
+```powershell
+docker inspect --format "{{.State.Health.Status}}" firabot-mysql
 ```
 
 Entrar no MySQL local:
@@ -251,6 +269,8 @@ Quando possível, validar:
 ## Critérios De Pronto
 
 - [ ] `npm test` passa.
+- [ ] `npm run test:no-build` passa depois do build.
+- [ ] `npm run ci:local` passa.
 - [ ] MySQL local sobe.
 - [ ] `npm run dev` inicia sem erro de configuração.
 - [ ] QR Code/pareamento funciona quando necessário.

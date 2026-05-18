@@ -8,8 +8,8 @@ Parcialmente confirmado pelo README. Docker Compose e usado para MySQL local. O 
 
 - Banco local: `docker compose up -d mysql`
 - Build da imagem do bot: `docker build -t firabot-v7 .`
-- Execucao da imagem do bot: `docker run --env-file .env -v ./auth:/app/auth firabot-v7`
-- Montagem opcional de documentos: `./documentos:/app/documentos`
+- Execucao da imagem do bot: `docker run --env-file .env -v ./auth:/app/auth -v ./documentos:/app/documentos firabot-v7`
+- MySQL publicado apenas em `127.0.0.1:3306`.
 
 ## Volumes e dados persistentes
 
@@ -27,6 +27,7 @@ Parcialmente confirmado pelo README. Docker Compose e usado para MySQL local. O 
 - [ ] Garantir que `.env`, `auth/`, `logs/` e sessoes nao sejam versionados.
 - [ ] Confirmar estrategia de atualizacao da imagem em servidor Linux.
 - [ ] Confirmar politica de restart automatico do container/processo.
+- [ ] Em Linux, validar permissao de escrita do volume `auth/` para o usuario `node` do container.
 
 ## Seguranca
 
@@ -35,6 +36,8 @@ Parcialmente confirmado pelo README. Docker Compose e usado para MySQL local. O 
 - Usar `.env` especifico de producao no servidor.
 - Proteger volume de `auth/` com permissao restrita.
 - Evitar publicar porta MySQL para a internet.
+- Rodar a imagem do bot sem root.
+- Manter o healthcheck do MySQL ativo para facilitar diagnostico local.
 
 ## Links
 

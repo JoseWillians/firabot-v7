@@ -16,6 +16,8 @@ Parcialmente confirmado pelo README. O projeto usa MySQL para usuarios, estados,
   - `user_states`: estado atual de navegacao.
   - `logs`: historico simples de eventos.
   - `docs`: documentos ativos carregados no menu de documentos.
+  - `important_links`: links importantes administraveis pelo painel.
+  - `notices`: editais administraveis pelo painel.
 
 ## Regras de seguranca
 
@@ -42,6 +44,15 @@ ORDER BY id;
 ```
 
 A categoria CAE fica preparada para cadastro futuro, mas sem registros iniciais no schema. Quando for ativada, recomenda-se inserir documentos com `category_code = 'cae'`, `category_label = 'CAE'` e `sort_order` sequencial, mantendo `is_active = 1`.
+
+## Tabelas `important_links` e `notices`
+
+O schema agora inclui tabelas pequenas para o CRUD real do painel administrativo:
+
+- `important_links`: `title`, `url`, `scope`, setor opcional, ordenacao e `is_active`.
+- `notices`: `title`, `url` opcional, `status`, `source`, setor opcional, ordenacao e `is_active`.
+
+As remocoes no painel devem ser soft delete, atualizando `is_active = 0`. Administradores setoriais so devem alterar registros do proprio setor; links/editais globais ficam reservados ao administrador principal.
 
 Para bancos já existentes, aplique a mudança de forma incremental após backup:
 
@@ -74,6 +85,7 @@ Pendente de confirmacao. Procedimento recomendado a documentar:
 - [ ] Confirmar schema completo em `database/schema.sql`.
 - [ ] Confirmar indices e constraints.
 - [x] Preparar documentos por categoria/setor na tabela `docs` sem alterar o fluxo atual.
+- [x] Preparar tabelas de links e editais para CRUD real do painel.
 - [ ] Confirmar se ha migrations alem do schema inicial.
 - [ ] Confirmar limpeza/retencao de `logs`.
 - [ ] Confirmar limpeza/expiracao de `user_states`.

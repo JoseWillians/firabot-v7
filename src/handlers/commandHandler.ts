@@ -5,7 +5,8 @@ import { fileURLToPath } from 'url'
 import { Command } from '../interfaces/Command.js'
 import { UserState } from '../menus/types.js'
 import { sendEndFlow, sendStartFlow } from '../flows/conversationFlow.js'
-import { registerUserLog } from '../services/logService.js'
+import { botLog, errorLog, registerUserLog } from '../services/logService.js'
+import { hasConfiguredAdmins, isAdminJid } from '../services/adminAuthService.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -27,7 +28,7 @@ const loadCommands = async () => {
 }
 
 const commandsReady = loadCommands().catch(error => {
-  console.error('Erro ao carregar comandos:', error)
+  errorLog('UNKNOWN_ERROR', 'Erro ao carregar comandos', error)
 })
 
 export async function processCommand(
@@ -55,11 +56,25 @@ export async function processCommand(
   }
 
   if (commandName && commands.has(commandName)) {
-    await commands.get(commandName)?.execute(sock, msg, args)
+    const command = commands.get(commandName)
+
+    if (command?.adminOnly && !isAdminJid(userJid)) {
+      await sock.sendMessage(userJid, { text: '⚠️ Comando restrito a administradores autorizados.' })
+      botLog('COMMAND_DENIED', 'Comando administrativo bloqueado', {
+        user: userJid,
+        command: commandName,
+        adminsConfigured: hasConfiguredAdmins(),
+        stateBefore: currentState
+      })
+      await registerUserLog(userJid, userName, `Comando restrito negado: !${commandName}`, currentState, 'COMMAND_DENIED', { command: commandName, success: false })
+      return
+    }
+
+    await command?.execute(sock, msg, args)
     await registerUserLog(userJid, userName, `Comando: !${commandName}`, currentState, 'COMMAND_EXECUTED', { command: commandName, success: true })
     return
   }
 
   await sock.sendMessage(userJid, { text: '⚠️ Comando não reconhecido. Use !help para ver os comandos disponíveis.' })
-  await registerUserLog(userJid, userName, `Comando desconhecido: ${body}`, currentState, 'COMMAND_UNKNOWN', { command: body, success: false })
+  await registerUserLog(userJid, userName, `Comando desconhecido: ${commandName || 'vazio'}`, currentState, 'COMMAND_UNKNOWN', { command: commandName || 'vazio', success: false })
 }

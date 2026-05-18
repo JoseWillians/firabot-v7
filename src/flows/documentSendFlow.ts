@@ -28,6 +28,12 @@ export async function sendDocumentWithTracking(
       success: false,
       errorMessage: result.errorMessage
     })
+    /**
+     * Mesmo quando o arquivo falha, o usuário precisa sair com uma rota clara.
+     * Mantemos as opções irmãs do submenu para permitir tentar outro documento
+     * sem forçar a pessoa a recomeçar toda a conversa.
+     */
+    await sendContextualFollowUp(sock, userJid, siblingOptions || [], option)
     return
   }
 

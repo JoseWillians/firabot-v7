@@ -125,8 +125,8 @@ Fallback local: `src/menus/courseMenu.ts`.
 | Comando | Função |
 | --- | --- |
 | `!help` / `!ajuda` / `!menu` | Lista comandos e instruções |
-| `!ping` | Confirma que o bot responde |
-| `!status` | Mostra status de WhatsApp, banco, documentos e debug |
+| `!ping` | Confirma que o bot responde; restrito a `ADMIN_NUMBERS` |
+| `!status` | Mostra status de WhatsApp, banco, documentos e debug; restrito a `ADMIN_NUMBERS` |
 | `!ifma` | Mostra informações úteis do campus |
 | `!oi` | Abre o menu principal |
 | `!encerrar` | Encerra atendimento |

@@ -35,6 +35,7 @@ export const config = {
   spamWindowMs: toNumber(process.env.SPAM_WINDOW_MS, 2500),
   reconnectDelayMs: toNumber(process.env.RECONNECT_DELAY_MS, 5000),
   userStateTtlMinutes: toNumber(process.env.USER_STATE_TTL_MINUTES, 60),
+  documentMaxSizeMb: toNumber(process.env.DOCUMENT_MAX_SIZE_MB, 25),
   adminNumbers: toList(process.env.ADMIN_NUMBERS),
   database: {
     host: process.env.DB_HOST,

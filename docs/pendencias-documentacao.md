@@ -43,7 +43,7 @@ Estados a incluir:
 - `curso_eng_civil`
 - `suporte_confirmacao`
 
-Também deve marcar que `USER_STATE_TTL_MINUTES` ainda não tem expiração real implementada.
+Também deve marcar que `USER_STATE_TTL_MINUTES` já tem expiração real implementada no bot.
 
 ### `docs/regras-de-negocio.md`
 
@@ -116,12 +116,12 @@ Atualização recomendada:
 
 ## Pendências De Código Que Impactam Docs
 
-- `USER_STATE_TTL_MINUTES` é lido, mas ainda não aplicado.
-- `ADMIN_NUMBERS` é lido, mas ainda não protege comandos.
+- `USER_STATE_TTL_MINUTES` está aplicado ao estado do usuário.
+- `ADMIN_NUMBERS` protege comandos operacionais do bot.
 - `src/functions/database.ts` concentra múltiplas responsabilidades.
-- `src/menus/noticesMenu.ts` contém editais hardcoded.
-- CAE ainda não possui documentos automáticos.
-- Não há API/painel administrativo implementado, apesar do schema inicial.
+- `src/menus/noticesMenu.ts` mantém editais locais apenas como fallback quando o banco está vazio ou indisponível.
+- CAE já pode receber documentos automáticos via painel e tabela `docs` com `category_code = cae`.
+- O painel administrativo existe em `C:\Dev\Projetos\admin-firabot`, com API local, sessão, RBAC, CRUD inicial, upload seguro e fila inicial de suporte; ainda faltam integrações operacionais completas com WhatsApp/QR, produção, auditoria avançada e deploy.
 
 ## Prioridade Recomendada
 

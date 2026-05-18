@@ -32,8 +32,8 @@ export const fallbackDocuments: DocumentMenuItem[] = [
   }
 ]
 
-export const createDocsMenu = (documents: MenuOption[]): MenuDefinition => ({
-  title: '📄 *DOCUMENTOS DISPONÍVEIS*',
+export const createDocsMenu = (documents: MenuOption[], title = '📄 *DOCUMENTOS DISPONÍVEIS*'): MenuDefinition => ({
+  title,
   prompt: 'Escolha uma opção digitando o número:',
   options: documents,
   footer: '0 - Voltar ao Menu Principal'

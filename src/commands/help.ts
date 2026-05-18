@@ -2,6 +2,7 @@ import { Command } from '../interfaces/Command.js'
 import * as fs from 'fs'
 import * as path from 'path'
 import { fileURLToPath } from 'url'
+import { isAdminJid } from '../services/adminAuthService.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -11,6 +12,8 @@ const helpCommand: Command = {
   description: 'Lista todos os comandos disponíveis e a finalidade do bot',
   alias: ['ajuda', 'menu'],
   execute: async (sock, msg, args) => {
+    const remoteJid = msg.key?.remoteJid || ''
+    const isAdmin = isAdminJid(remoteJid)
     const commandsPath = path.join(__dirname, '../commands')
     const files = fs.readdirSync(commandsPath).filter(file => file.endsWith('.ts') || file.endsWith('.js'))
 
@@ -27,6 +30,7 @@ const helpCommand: Command = {
     for (const file of files) {
       // Importa dinamicamente cada comando para ler o name e description
       const { default: cmd } = await import(`./${file}`)
+      if (cmd?.adminOnly && !isAdmin) continue
       if (cmd?.name && cmd.name !== 'oi' && cmd.name !== 'help') { 
         menu += `*!${cmd.name}*: ${cmd.description}\n`
       }

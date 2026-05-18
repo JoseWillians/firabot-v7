@@ -1,14 +1,16 @@
 import assert from 'node:assert/strict'
+import path from 'node:path'
 import {
   isGreetingOrStartMessage,
   isMessageFromBeforeStart,
   isPrefixedCommand
 } from '../dist/services/messageGuardService.js'
-import { getMenuRouteForOption } from '../dist/services/menuRoutingService.js'
-import { normalizeUserState } from '../dist/services/userStateService.js'
-import { maskPhone } from '../dist/services/logService.js'
+import { getMenuRouteForOption, shouldCaptureSupportMessage } from '../dist/services/menuRoutingService.js'
+import { isStateExpiredWithTtl, normalizeUserState } from '../dist/services/userStateService.js'
+import { isAdminNumberAuthorized, normalizeAdminNumber } from '../dist/services/adminAuthService.js'
+import { botLog, maskPhone } from '../dist/services/logService.js'
 import { formatCourseMenu, formatMainMenu, formatMenu } from '../dist/services/menuService.js'
-import { formatDocumentSuccessMessage } from '../dist/services/documentService.js'
+import { formatDocumentSuccessMessage, resolveSafeDocumentPath, sendDocument } from '../dist/services/documentService.js'
 import { extractMessageText } from '../dist/services/messageTextService.js'
 import { docsCategoryMenu } from '../dist/menus/docsMenu.js'
 import { getPpcCategoryCodeByState } from '../dist/menus/courseMenu.js'
@@ -87,6 +89,13 @@ runTest('mantém curso roteando para seleção de curso', () => {
   assert.equal(getMenuRouteForOption('curso', '4'), 'curso')
 })
 
+runTest('captura mensagem numérica no suporte sem confundir com menu', () => {
+  assert.equal(shouldCaptureSupportMessage('suporte', '123456'), true)
+  assert.equal(shouldCaptureSupportMessage('suporte', 'protocolo 123'), true)
+  assert.equal(shouldCaptureSupportMessage('suporte', '0'), false)
+  assert.equal(shouldCaptureSupportMessage('main', '123456'), false)
+})
+
 runTest('mantém estados de PPC por curso no roteamento certo', () => {
   assert.equal(getMenuRouteForOption('curso_eng_comp', '1'), 'curso_eng_comp')
   assert.equal(getMenuRouteForOption('curso_eng_comp', '2'), 'curso_eng_comp')
@@ -150,8 +159,46 @@ runTest('usa main como fallback para estado inválido', () => {
   assert.equal(normalizeUserState('estado-invalido'), 'main')
 })
 
+runTest('detecta expiração de estado por TTL configurado', () => {
+  const now = new Date('2026-05-17T12:00:00Z')
+
+  assert.equal(isStateExpiredWithTtl(new Date('2026-05-17T10:59:00Z'), 60, now), true)
+  assert.equal(isStateExpiredWithTtl(new Date('2026-05-17T11:30:00Z'), 60, now), false)
+  assert.equal(isStateExpiredWithTtl(new Date('2026-05-16T12:00:00Z'), 0, now), false)
+})
+
+runTest('normaliza e autoriza números administrativos', () => {
+  assert.equal(normalizeAdminNumber('+55 (98) 99999-9999@s.whatsapp.net'), '5598999999999')
+  assert.equal(isAdminNumberAuthorized('5598999999999@s.whatsapp.net', ['+55 (98) 99999-9999']), true)
+  assert.equal(isAdminNumberAuthorized('5598888888888@s.whatsapp.net', ['5598999999999']), false)
+})
+
 runTest('mascara telefone em logs técnicos', () => {
   assert.equal(maskPhone('5599999999999'), '5599****99')
+})
+
+runTest('sanitiza conteúdo sensível em logs técnicos', () => {
+  const originalLog = console.log
+  const outputs = []
+  console.log = value => outputs.push(String(value))
+
+  try {
+    botLog('MESSAGE_RECEIVED', 'Teste de sanitização', {
+      user: '5599999999999@s.whatsapp.net',
+      body: 'meu cpf é 00000000000',
+      password: 'senha-secreta',
+      token: 'token-secreto'
+    })
+  } finally {
+    console.log = originalLog
+  }
+
+  const payload = outputs.join('\n')
+  assert.match(payload, /5599\*\*\*\*99/)
+  assert.match(payload, /\[USER_CONTENT_REDACTED:/)
+  assert.doesNotMatch(payload, /00000000000/)
+  assert.doesNotMatch(payload, /senha-secreta/)
+  assert.doesNotMatch(payload, /token-secreto/)
 })
 
 runTest('mensagem de sucesso de documento inclui resumo quando disponível', () => {
@@ -164,6 +211,38 @@ runTest('mensagem de sucesso de documento inclui resumo quando disponível', () 
 
   assert.match(message, /Documento enviado com sucesso\./)
   assert.match(message, /Resumo: Serve para orientar/)
+})
+
+runTest('protege resolução de documentos contra path traversal', () => {
+  assert.equal(resolveSafeDocumentPath('drca/requerimento-academico.pdf').isInsideDocumentsDir, true)
+  assert.equal(resolveSafeDocumentPath('./documentos/drca/requerimento-academico.pdf').isInsideDocumentsDir, true)
+  assert.equal(resolveSafeDocumentPath('../.env').isInsideDocumentsDir, false)
+  assert.equal(resolveSafeDocumentPath(path.resolve('package.json')).isInsideDocumentsDir, false)
+})
+
+await runAsyncTest('não envia documento com caminho fora de DOCUMENTS_DIR', async () => {
+  const { sock, messages } = createFakeSocket()
+  const originalLog = console.log
+  const originalError = console.error
+  console.log = () => {}
+  console.error = () => {}
+
+  let result
+  try {
+    result = await sendDocument(sock, 'user@s.whatsapp.net', {
+      key: 'x',
+      label: 'Arquivo proibido',
+      path: '../.env'
+    })
+  } finally {
+    console.log = originalLog
+    console.error = originalError
+  }
+
+  assert.equal(result.success, false)
+  assert.match(result.errorMessage, /fora da pasta permitida/)
+  assert.equal(messages.length, 1)
+  assert.match(messages[0].content.text, /caminho do arquivo está inválido/)
 })
 
 runTest('follow-up contextual mostra opções restantes do mesmo menu', () => {
@@ -199,12 +278,12 @@ runTest('mensagens do suporte orientam envio e confirmação', () => {
   assert.match(formatSupportAcknowledgement(), /Sua mensagem foi registrada/)
 })
 
-runTest('lista até 10 editais em andamento do IFMA', () => {
-  const message = formatOpenNoticesMessage()
+await runAsyncTest('lista editais do banco ou fallback local do IFMA', async () => {
+  const message = await formatOpenNoticesMessage({ useDatabase: false })
 
   assert.equal(openNotices.length, 10)
-  assert.match(message, /Edital Nº 143\/2026/)
-  assert.match(message, /Edital Nº 30\/2026/)
+  assert.match(message, /Editais IFMA/)
+  assert.match(message, /1\./)
   assert.match(message, /Fonte: https:\/\/processoseletivo\.ifma\.edu\.br\//)
 })
 

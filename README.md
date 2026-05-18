@@ -41,9 +41,11 @@ Variáveis principais:
 - `MESSAGE_START_GRACE_SECONDS`: tolerância para filtro de mensagens anteriores ao início.
 - `SPAM_WINDOW_MS`: janela para evitar respostas repetidas ao mesmo usuário/texto.
 - `RECONNECT_DELAY_MS`: atraso antes de tentar reconectar.
-- `USER_STATE_TTL_MINUTES`: tempo planejado para expiração futura de estado.
-- `ADMIN_NUMBERS`: números autorizados para comandos administrativos futuros, separados por vírgula.
+- `USER_STATE_TTL_MINUTES`: tempo de expiração do estado de conversa; `0` desativa a expiração.
+- `DOCUMENT_MAX_SIZE_MB`: tamanho máximo de PDF para envio automático.
+- `ADMIN_NUMBERS`: números autorizados para comandos administrativos, separados por vírgula e com DDI/DDD.
 - `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`: conexão MySQL.
+- `MYSQL_ROOT_PASSWORD`, `MYSQL_DATABASE`, `MYSQL_USER`, `MYSQL_PASSWORD`: opcionais para sobrescrever o MySQL local do `docker-compose.yml`.
 
 ## Banco de Dados
 
@@ -59,7 +61,7 @@ O `docker-compose.yml` sobe:
 - banco: `firabot`
 - usuário: `firabot`
 - senha local: `firabot123`
-- porta local: `3306`
+- porta local: `127.0.0.1:3306`
 - schema inicial: `./database/schema.sql`
 
 Acesse o MySQL local com:
@@ -88,6 +90,8 @@ Tabelas usadas:
 - `user_states`: estado atual de navegação.
 - `logs`: histórico simples de eventos.
 - `docs`: documentos ativos carregados no menu de documentos.
+- `important_links`: links importantes administráveis pelo painel.
+- `notices`: editais administráveis pelo painel enquanto não houver sincronização automática.
 - `sectors`, `admin_roles`, `admin_users`, `admin_user_sectors`, `admin_audit_logs`: base inicial para o painel administrativo e RBAC por setor.
 
 Para produção, use outro `.env` apontando para o servidor do IFMA. Não misture credenciais remotas com o `.env` local de desenvolvimento.
@@ -95,6 +99,8 @@ Para produção, use outro `.env` apontando para o servidor do IFMA. Não mistur
 ### Documentos
 
 Na tabela `docs`, a coluna `name` é o rótulo exibido ao usuário no WhatsApp e deve manter acentos. A coluna `path` é apenas o caminho físico do arquivo PDF e deve evitar acentos para reduzir problemas de encoding entre Windows, Docker, MySQL e WhatsApp.
+
+Os menus de documentos são dinâmicos por categoria. Um PDF cadastrado no painel com `category_code = cae` aparece em `Documentos > Documentos CAE`; com `category_code = drca`, aparece em `Documentos > Documentos DRCA`. O caminho salvo no banco é relativo, por exemplo `./documentos/cae/nome-do-arquivo.pdf`, e o bot resolve esse caminho dentro de `DOCUMENTS_DIR` no servidor.
 
 Exemplo esperado:
 
@@ -154,6 +160,18 @@ Testes:
 npm test
 ```
 
+Teste sem recompilar, útil depois de um `npm run build` já validado:
+
+```bash
+npm run test:no-build
+```
+
+Validação local equivalente ao CI:
+
+```bash
+npm run ci:local
+```
+
 ## Estratégia de Logs
 
 O Firabot usa uma estratégia híbrida:
@@ -176,17 +194,17 @@ docker build -t firabot-v7 .
 Execução:
 
 ```bash
-docker run --env-file .env -v ./auth:/app/auth firabot-v7
+docker run --env-file .env -v ./auth:/app/auth -v ./documentos:/app/documentos firabot-v7
 ```
 
-Monte também `./documentos:/app/documentos` se quiser usar documentos do host em vez dos copiados na imagem.
+A imagem de produção roda como usuário `node` e não copia `.env` nem `auth/`. Mantenha `auth/` como volume persistente e restrito; em Linux, ajuste permissões do volume se o container não conseguir gravar a sessão do Baileys. O MySQL do Compose fica publicado apenas em `127.0.0.1` para evitar exposição acidental na rede.
 
 ## Comandos
 
-- `oi`, `olá`, `bom dia`, `boa tarde`, `boa noite`, `menu`, `iniciar`, `ajuda`: iniciam atendimento sem prefixo.
-- `!help`: lista comandos técnicos.
-- `!ping`: verifica se o bot está ativo.
-- `!status`: mostra status de WhatsApp, banco, inicialização, ambiente, documentos ativos e debug.
+- `oi`, `olá`, `bom dia`, `boa tarde`, `boa noite`, `menu`, `iniciar`, `início`, `começar`, `ajuda`, `help`, `start`: iniciam atendimento sem prefixo.
+- `!help`: lista comandos técnicos disponíveis para o usuário atual.
+- `!ping`: verifica se o bot está ativo. Restrito a `ADMIN_NUMBERS`.
+- `!status`: mostra status de WhatsApp, banco, inicialização, ambiente, documentos ativos, documentos encontrados/ausentes e debug. Restrito a `ADMIN_NUMBERS`.
 - `!ifma`: mostra informações úteis do campus.
 - `encerrar`: encerra atendimento em fluxos de conversa.
 - `!encerrar`: encerra atendimento como comando técnico compatível.
@@ -202,6 +220,18 @@ Menu principal atual:
 - `7 - Suporte`
 
 O menu principal não exibe `0 - Voltar`. A opção `0` vale apenas dentro de submenus ou telas de continuidade.
+
+Links importantes e editais são carregados preferencialmente das tabelas `important_links` e `notices`. As listas locais continuam como fallback quando o banco está vazio ou indisponível.
+
+## Testes e Qualidade
+
+O comando `npm test` executa `npm run build` e depois `npm run test:no-build`, que roda testes com `node:assert` sobre serviços, menus, estados, sanitização de logs, proteção de paths de documentos e socket fake. O comando `npm run test:no-build` reaproveita o `dist/` existente e não recompila, então use-o apenas depois de gerar um build confiável. Ele ainda não substitui testes de integração com WhatsApp/Baileys real, MySQL real em fluxo completo ou envio real de mídia.
+
+Casos manuais importantes:
+
+- `7` abre suporte; uma matrícula ou protocolo numérico deve ser registrado como mensagem de suporte.
+- Documento ausente ou caminho inválido deve orientar o usuário e não registrar `DOCUMENT_SENT`.
+- `!status` deve mostrar a saúde geral dos documentos ativos, incluindo PPCs.
 
 ## Estrutura
 
@@ -240,7 +270,7 @@ No fluxo `5 - Editais Abertos`, o bot lista até 10 editais em andamento da pág
 - QR Code aparece repetidamente: apague a sessão em `auth` apenas se quiser parear novamente.
 - Bot não responde: confira se `IGNORE_GROUPS=true` está bloqueando mensagens de grupo e se a mensagem não é anterior ao início do bot.
 - Documentos não enviam: verifique se o caminho cadastrado em `docs.path` existe dentro do projeto ou container.
-- Estado parece errado: confira a tabela `user_states` e os logs do console; falhas de banco agora são registradas claramente.
+- Estado parece errado: confira a tabela `user_states`, o valor de `USER_STATE_TTL_MINUTES` e os logs do console; falhas de banco agora são registradas claramente.
 - Docker não encontra PDFs: monte `./documentos:/app/documentos` ou garanta que a pasta foi copiada para a imagem.
 - Erro de configuração ao iniciar: confira `DB_HOST`, `DB_USER` e `DB_NAME` no `.env`.
 - Banco indisponível: confirme `docker compose up -d mysql`, `DB_HOST=127.0.0.1`, `DB_PORT=3306` e as credenciais locais.
@@ -257,7 +287,7 @@ No fluxo `5 - Editais Abertos`, o bot lista até 10 editais em andamento da pág
 8. Envie `3`, escolha cada curso disponível e confirme abertura do submenu de PPCs.
 9. Escolha um PPC e confirme envio do PDF, resumo e lista das outras opções do mesmo submenu.
 10. Envie `oi` em qualquer estado e confirme reset para `main`.
-11. Envie `!ping`, `!help` e `!status`.
+11. Com um número listado em `ADMIN_NUMBERS`, envie `!ping`, `!help` e `!status`; com outro número, confirme que `!ping` e `!status` são negados.
 12. Envie `4`, confirme o link direto do Login SUAP, depois `0`, e confirme retorno ao menu principal.
 13. Envie `5`, confira a lista de editais do IFMA, depois `encerrar`, e confirme encerramento do atendimento.
 14. Envie `7`, mande uma mensagem de suporte, depois envie `0` ou `encerrar`.

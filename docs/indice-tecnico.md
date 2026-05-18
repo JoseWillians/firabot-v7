@@ -48,8 +48,8 @@ Pontos consolidados:
 
 Pontos ainda pendentes:
 
-- `USER_STATE_TTL_MINUTES` é lido, mas a expiração real de estado ainda não foi implementada.
-- `ADMIN_NUMBERS` é lido, mas comandos administrativos ainda são futuros.
+- `USER_STATE_TTL_MINUTES` é aplicado ao ler estado do usuário; estados expirados voltam para `main`.
+- `ADMIN_NUMBERS` protege comandos operacionais como `!ping` e `!status`.
 - Não há migrations versionadas além de `database/schema.sql`.
 - Não há política definida de retenção/limpeza de logs.
 - O painel administrativo ainda é planejamento/schema inicial, sem API ou frontend.

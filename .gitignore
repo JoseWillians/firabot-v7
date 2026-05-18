@@ -4,5 +4,6 @@ dist/
 auth/
 logs/
 *.log
+database/backups/
 graphify-out/
 db.txt

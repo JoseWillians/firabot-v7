@@ -149,8 +149,8 @@ Menus declarativos:
 
 - `src/functions/database.ts` ainda mistura acesso a usuário, estado, logs e docs em um único arquivo.
 - Não há migrations incrementais; `schema.sql` é o ponto único do schema.
-- `USER_STATE_TTL_MINUTES` é configuração planejada, mas ainda não expira estados.
-- `ADMIN_NUMBERS` é configuração futura, mas ainda não protege comandos administrativos.
+- `USER_STATE_TTL_MINUTES` expira estados antigos ao consultar `user_states.updated_at`.
+- `ADMIN_NUMBERS` protege comandos administrativos no `commandHandler`.
 - Caminhos de documentos vindos do banco devem ser restringidos antes de existir painel administrativo.
 - Editais hardcoded podem ficar desatualizados.
 

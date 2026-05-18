@@ -1,3 +1,6 @@
+import { getActiveNotices } from '../functions/database.js'
+import { errorLog } from '../services/logService.js'
+
 export interface OpenNotice {
   title: string
   url: string
@@ -57,12 +60,30 @@ export const openNotices: OpenNotice[] = [
   }
 ]
 
-export function formatOpenNoticesMessage() {
-  const notices = openNotices.slice(0, 10)
+export async function formatOpenNoticesMessage(options: { useDatabase?: boolean } = {}) {
+  let notices: OpenNotice[] = []
+
+  if (options.useDatabase !== false) {
+    try {
+      const databaseNotices = await getActiveNotices()
+      notices = databaseNotices.map(notice => ({
+        title: notice.title,
+        url: notice.url || '',
+        status: notice.status.toLowerCase().includes('inscri') ? 'inscricoes_abertas' : 'em_andamento'
+      }))
+    } catch (error) {
+      errorLog('DATABASE_ERROR', 'Erro ao carregar editais dinâmicos. Usando fallback local', error)
+    }
+  }
+
+  if (!notices.length) notices = openNotices.slice(0, 10)
+
   const noticesText = notices
     .map((notice, index) => {
       const status = notice.status === 'inscricoes_abertas' ? 'Inscrições abertas' : 'Em andamento'
-      return `${index + 1}. ${notice.title}\n   ${status}: ${notice.url}`
+      return notice.url
+        ? `${index + 1}. ${notice.title}\n   ${status}: ${notice.url}`
+        : `${index + 1}. ${notice.title}\n   ${status}`
     })
     .join('\n\n')
 

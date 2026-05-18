@@ -3,7 +3,9 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "test": "npm run build && node tests/run-tests.mjs",
+    "test": "npm run build && npm run test:no-build",
+    "test:no-build": "node tests/run-tests.mjs",
+    "ci:local": "npm run build && npm run test:no-build",
     "dev": "tsx src/index.ts",
     "clean": "rimraf dist",
     "build": "tsc",

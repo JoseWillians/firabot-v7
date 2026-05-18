@@ -1,7 +1,7 @@
 import { Command } from '../interfaces/Command.js'
 import { config } from '../config.js'
 import { checkDatabaseConnection } from '../functions/database.js'
-import { checkDocumentsHealth } from '../services/documentService.js'
+import { checkDocumentsHealth, DocumentsHealth } from '../services/documentService.js'
 import { getRuntimeStatus, setDatabaseStatus } from '../services/runtimeStatusService.js'
 
 const formatDate = (date: Date) => {
@@ -14,23 +14,26 @@ const formatDate = (date: Date) => {
 const statusCommand: Command = {
   name: 'status',
   description: 'Mostra o status do WhatsApp, banco e documentos ativos',
+  adminOnly: true,
   execute: async (sock, msg) => {
     const runtime = getRuntimeStatus()
     const database = await checkDatabaseConnection()
     setDatabaseStatus(database.ok ? 'connected' : 'unavailable')
 
-    let documentsHealth = {
+    let documentsHealth: DocumentsHealth = {
+      ok: false,
       totalActive: 0,
       found: 0,
       missing: 0,
-      missingDocuments: [] as Array<{ label: string }>
+      missingDocuments: [],
+      errorMessage: undefined
     }
 
     if (database.ok) {
       documentsHealth = await checkDocumentsHealth()
     }
 
-    const documentsStatus = documentsHealth.missing === 0 ? 'ok' : 'atenção'
+    const documentsStatus = !documentsHealth.ok ? 'indisponível' : documentsHealth.missing === 0 ? 'ok' : 'atenção'
     const missingList = config.debug && documentsHealth.missingDocuments.length
       ? `\nAusentes: ${documentsHealth.missingDocuments.map(document => document.label).join(', ')}`
       : ''

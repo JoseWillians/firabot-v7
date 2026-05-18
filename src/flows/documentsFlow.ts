@@ -21,7 +21,12 @@ export async function processDocsCategoryOption(sock: WASocket, userJid: string,
   }
 
   if (option === '2') {
-    await sock.sendMessage(userJid, { text: formatMenu(emptyCaeDocsMenu) })
+    const caeDocuments = await getAvailableDocuments('cae')
+    await sock.sendMessage(userJid, {
+      text: caeDocuments.length
+        ? await formatDocumentsMenu('cae', '📄 *DOCUMENTOS CAE*')
+        : formatMenu(emptyCaeDocsMenu)
+    })
     const stateAfter = await updateUserState(userJid, 'docs_cae')
     await registerUserLog(userJid, userName, 'Documentos: CAE', currentState, 'MENU_OPENED', { stateBefore: currentState, stateAfter, menu: 'documentos cae', success: true })
     return
@@ -63,8 +68,34 @@ export async function processDrcaDocsOption(sock: WASocket, userJid: string, use
 }
 
 export async function processCaeDocsOption(sock: WASocket, userJid: string, userName: string, option: string, currentState: UserState) {
-  await sock.sendMessage(userJid, {
-    text: `Ainda não há documentos da CAE cadastrados para envio automático.\n\n${formatMenu(emptyCaeDocsMenu)}`
-  })
-  await registerUserLog(userJid, userName, `Opção em documentos CAE sem cadastro: ${option}`, currentState, 'INVALID_OPTION', { menu: 'documentos cae', success: false })
+  /**
+   * A CAE usa a mesma resolução dinâmica da DRCA.
+   * Se o painel cadastrar um PDF ativo com category_code = "cae", ele passa a
+   * aparecer no menu e pode ser enviado pelo bot sem reinserir opções no código.
+   */
+  const documents = await getAvailableDocuments('cae')
+  const document = await findDocumentByOption(option, 'cae')
+
+  if (!document) {
+    await sock.sendMessage(userJid, {
+      text: documents.length
+        ? `Não consegui entender essa opção no menu de documentos CAE. Escolha uma opção válida:\n\n${await formatDocumentsMenu('cae', '📄 *DOCUMENTOS CAE*')}`
+        : `Ainda não há documentos da CAE cadastrados para envio automático.\n\n${formatMenu(emptyCaeDocsMenu)}`
+    })
+    await registerUserLog(userJid, userName, `Opção inválida em documentos CAE: ${option}`, currentState, 'INVALID_OPTION', { menu: 'documentos cae', success: false })
+    return
+  }
+
+  await sendDocumentWithTracking(
+    sock,
+    userJid,
+    userName,
+    option,
+    currentState,
+    document,
+    'documentos cae',
+    `Documento CAE solicitado: ${document.label}`,
+    `Documento CAE enviado: ${document.label}`,
+    documents
+  )
 }

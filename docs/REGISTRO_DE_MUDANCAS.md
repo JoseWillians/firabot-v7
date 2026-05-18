@@ -1,5 +1,125 @@
 # Registro de Mudanças - Firabot v7
 
+## Data: 2026-05-17
+
+### Área alterada
+Bot WhatsApp, comandos operacionais e estado de conversa.
+
+### O que foi alterado
+- `!ping` e `!status` passaram a exigir número listado em `ADMIN_NUMBERS`.
+- `!help` agora mostra comandos restritos apenas para administradores autorizados.
+- O estado do usuário passa a expirar por `USER_STATE_TTL_MINUTES` usando `user_states.updated_at`.
+- Ao expirar, o estado volta para `main` sem alterar schema nem tocar em `auth/`, `.env`, `dist/` ou `node_modules/`.
+
+### Como testar
+Configurar `ADMIN_NUMBERS` com o número do administrador, rodar `npm test`, enviar `!status` e `!ping` com número autorizado e repetir com número não autorizado. Para TTL, reduzir `USER_STATE_TTL_MINUTES` em ambiente local e confirmar que um estado antigo retorna para `main`.
+
+## Data: 2026-05-17
+
+### Área alterada
+Painel administrativo, autenticação e usuários administrativos.
+
+### O que foi alterado
+- O schema oficial inclui `enrollment_code` em `admin_users`.
+- O login administrativo passa a aceitar e-mail/senha ou matrícula/senha.
+- A tela `Usuários` do painel permite cadastrar administradores principais e administradores setoriais.
+- A tela `Usuários` permite remover/desativar administradores.
+- Administradores criados pelo painel usam senha hasheada no backend.
+- Endpoints de usuários foram protegidos por `users:read` e `users:write`.
+- O QA do painel foi ampliado para cobrir login por matrícula, CRUD admin, RBAC e ausência de senha/hash em payloads públicos.
+
+### Por que foi alterado
+Servidores do IFMA podem ser identificados tanto pelo e-mail institucional quanto pelo código de matrícula. O painel precisa refletir essa regra para o fluxo administrativo futuro e permitir teste real de gestão de usuários.
+
+### Impacto esperado
+O administrador principal já consegue testar criação e desativação de usuários administrativos. Administradores setoriais não conseguem acessar a gestão de usuários, preservando a separação de responsabilidades.
+
+### Como testar
+Rodar `npm run dev` no painel, entrar com `admin@firabot.local` ou matrícula `000001` usando a senha demo, acessar `/usuarios`, cadastrar um administrador e removê-lo/desativá-lo. Testar também login por matrícula `000002` e confirmar que o admin setorial não acessa `/usuarios`.
+
+## Data: 2026-05-17
+
+### Área alterada
+Painel administrativo.
+
+### O que foi alterado
+- A API do painel recebeu configuração `.env.example` própria.
+- Foi criada camada de conexão MySQL com `mysql2/promise`, `utf8mb4` e healthcheck de banco.
+- Foram adicionados repositórios para ler `docs`, logs de suporte e usuários administrativos do schema oficial do FiraBot.
+- Endpoints de documentos, suporte e usuários passam a tentar ler o banco real e usam fallback mockado apenas quando o banco local estiver indisponível ou sem dados.
+
+### Por que foi alterado
+O painel precisa sair do mock gradualmente e começar a consumir o banco real do FiraBot sem quebrar o desenvolvimento local quando o Docker/MySQL estiver desligado.
+
+### Impacto esperado
+Com o MySQL local ligado, o painel já consegue refletir documentos cadastrados em `docs` e preparar a visualização operacional de suporte/usuários. Com o banco desligado, o painel continua utilizável para desenvolvimento visual e de fluxo.
+
+### Como testar
+Subir o banco com `docker compose up -d mysql` em `C:\Dev\Projetos\firabot-v7`, rodar `npm run dev` no painel e acessar `/api/admin/v1/health/database`, `/api/admin/v1/documents` e `/api/admin/v1/documents/summary`.
+
+## Data: 2026-05-17
+
+### Área alterada
+Painel administrativo.
+
+### O que foi alterado
+- A base do painel em `C:\Dev\Projetos\teste\admin-firabot` passou a ter uma API administrativa mínima em Node.js/TypeScript com Express.
+- A autenticação demo saiu de `sessionStorage` e passou a usar cookie `HttpOnly` emitido pelo backend.
+- Foram criados endpoints iniciais para dashboard, documentos, links, editais, suporte e usuários.
+- O frontend passou a consumir `/api/admin/v1` via proxy do Vite.
+- Foram adicionados checks de qualidade para validar cookie, RBAC no backend, rotas separadas e contratos principais.
+
+### Por que foi alterado
+O painel precisa evoluir como aplicação administrativa real, não apenas protótipo visual. A sessão e as permissões precisam ser validadas no backend para reduzir risco de exposição indevida de áreas administrativas.
+
+### Impacto esperado
+O projeto agora tem uma base concreta para evoluir o painel: login, sessão, permissões, dashboard e módulos iniciais já possuem fronteira frontend/API. A próxima etapa é substituir dados mockados por MySQL real e criar CRUDs com validação.
+
+### Como testar
+No protótipo do painel, executar `npm run dev`, acessar `http://127.0.0.1:4173/login`, fazer login com os usuários demo e validar as telas. Também executar `npm run check:api`, `npm run typecheck`, `npm run qa:panel` e `npm run build`.
+
+## Data: 2026-05-17
+
+### Área alterada
+Painel administrativo e documentação de planejamento.
+
+### O que foi alterado
+- Registrada a decisão de manter o painel administrativo em uma raiz separada do chatbot.
+- Registrada a escolha de VueJS + TypeScript com Vite para a primeira implementação do protótipo.
+- React e Next.js foram mantidos como alternativas futuras aceitas pelo PRD, sem misturar stacks no primeiro corte.
+
+### Por que foi alterado
+O painel e o bot têm responsabilidades diferentes. Separar as raízes evita misturar dependências web com o serviço WhatsApp/Baileys e reduz risco de uma alteração de frontend afetar a operação do bot.
+
+### Impacto esperado
+O projeto passa a ter uma evolução mais limpa: o bot continua como serviço TypeScript/Baileys e o painel evolui como aplicação web administrativa independente, com API segura, RBAC, auditoria e módulos de conteúdo.
+
+### Como testar
+No protótipo do painel, executar `npm install`, `npm run typecheck` e `npm run build`. Para visualizar, executar `npm run dev` e acessar `http://127.0.0.1:4173`.
+
+## Data: 2026-05-17
+
+### Área alterada
+Qualidade, segurança de documentos, suporte e observabilidade.
+
+### O que foi alterado
+- Mensagens numéricas no estado `suporte` passam a ser registradas como solicitação, exceto `0`, que continua voltando ao menu principal.
+- Logs técnicos deixam de registrar o corpo completo da mensagem do usuário e sanitizam chaves como `body`, `text`, `message` e `content`.
+- Caminhos de documentos agora são bloqueados quando escapam de `DOCUMENTS_DIR`.
+- Envio de PDF passou a usar leitura assíncrona e limite configurável por `DOCUMENT_MAX_SIZE_MB`.
+- Falhas de envio de documento agora mantêm orientação de continuidade para o usuário.
+- `!status` passa a diferenciar saúde indisponível de documentos, evitando falso `ok` quando a consulta de documentos falha.
+- Testes foram ampliados para sanitização de logs, path traversal, suporte numérico e envio bloqueado fora de `DOCUMENTS_DIR`.
+
+### Por que foi alterado
+Essas mudanças reduzem risco de vazamento de dados sensíveis, evitam envio de arquivos fora da pasta permitida, melhoram a experiência em falhas e preparam o projeto para o painel administrativo.
+
+### Impacto esperado
+O bot fica mais seguro para operar com documentos cadastrados no banco, mais confiável no suporte e mais claro para manutenção futura.
+
+### Como testar
+Execute `npm test`. Manualmente, teste `7` seguido de uma matrícula numérica, solicite um documento válido, simule documento ausente e rode `!status`.
+
 ## 1. O Que É O Firabot
 
 O Firabot v7 é um bot de WhatsApp em TypeScript para atendimento acadêmico do IFMA Santa Inês. Ele usa Baileys para conexão com WhatsApp, MySQL para persistência de usuários/estados/logs/documentos e menus guiados por mensagens numéricas.
@@ -388,8 +508,8 @@ Subir o banco com `docker compose up -d mysql`, rodar `npm run dev`, enviar `!st
 - Adicionar tabela de auditoria para erros técnicos.
 - Avaliar cache com TTL para documentos ativos.
 - Padronizar versionamento da pasta `auth`, possivelmente ignorando-a no Git.
-- Implementar expiração real de estado com `USER_STATE_TTL_MINUTES`.
-- Criar comandos administrativos restritos usando `ADMIN_NUMBERS`.
+- Monitorar a expiração real de estado com `USER_STATE_TTL_MINUTES` em produção.
+- Ampliar comandos administrativos restritos usando `ADMIN_NUMBERS` quando surgirem novas ações operacionais.
 - Criar migração SQL incremental para bancos já existentes que não tenham os novos campos de `logs`.
 - Consolidar o fluxo novo com Biblioteca, Documentos DRCA, Documentos CAE, PPC por curso, Links Importantes, Editais Abertos, RU e Suporte.
 - Criar painel administrativo com administrador principal e administradores setoriais por DRCA, CAE e Biblioteca.

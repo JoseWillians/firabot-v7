@@ -1,6 +1,7 @@
 import { WASocket } from 'baileys'
+import { createSupportTicket } from '../functions/database.js'
 import { UserState } from '../menus/types.js'
-import { registerUserLog } from '../services/logService.js'
+import { errorLog, registerUserLog } from '../services/logService.js'
 import { updateUserState } from '../services/userStateService.js'
 import { sendFollowUp } from './conversationFlow.js'
 
@@ -24,8 +25,17 @@ export async function handleSupportMessage(sock: WASocket, userJid: string, user
    * Enquanto não existe painel com administradores por setor, o suporte apenas
    * registra a mensagem do usuário e orienta o próximo passo. Quando o painel
    * existir, este ponto vira o handoff para fila/ticket do setor correto.
+   *
+   * O conteúdo livre não é gravado no log de atendimento para reduzir risco de
+   * guardar CPF, matrícula, informação social ou outro dado sensível.
    */
-  await registerUserLog(userJid, userName, `Mensagem de suporte: ${message}`, currentState, 'MESSAGE_RECEIVED', { menu: 'suporte', success: true })
+  try {
+    await createSupportTicket(userJid, userName, message)
+  } catch (error) {
+    errorLog('DATABASE_ERROR', 'Erro ao registrar chamado de suporte na fila administrativa', error, { user: userJid })
+  }
+
+  await registerUserLog(userJid, userName, `Mensagem de suporte registrada (${message.length} caracteres)`, currentState, 'SUPPORT_REQUEST', { menu: 'suporte', success: true })
   await sock.sendMessage(userJid, {
     text: formatSupportAcknowledgement()
   })
